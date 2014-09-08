@@ -146,11 +146,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="common.h" />
     <ClInclude Include="global_state.h" />
     <ClInclude Include="repl.h" />
     <ClInclude Include="unicodehack.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="global_state.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="repl.cpp" />
   </ItemGroup>

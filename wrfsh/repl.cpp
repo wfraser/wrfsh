@@ -4,11 +4,8 @@
 #include <unordered_map>
 #include <locale>
 
+#include "common.h"
 #include "global_state.h"
-
-#ifdef _MSC_VER
-#define snprintf(buf, n, format, ...)  _snprintf_s(buf, n, n, format, __VA_ARGS__)
-#endif
 
 using namespace std;
 
@@ -32,20 +29,49 @@ int if_commandlet(istream& in, ostream& out, ostream& err, global_state& state, 
     (void)in;
     (void)out;
     (void)err;
-    (void)state;
     (void)args;
+
     //TODO
+    bool if_result = false;
+
+    state.if_state.push_back({ if_result });
+
     return 0;
 }
 
 int else_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
 {
-    (void)in;
-    (void)out;
-    (void)err;
-    (void)state;
-    (void)args;
-    //TODO
+    if (state.if_state.size() == 0)
+    {
+        err << "Syntax error: else without preceding if\n";
+        state.error = true;
+        return -1;
+    }
+
+    if (args.size() > 0)
+    {
+        if (args[0] == "if")
+        {
+            if (!state.if_state.back().active)
+            {
+                if_commandlet(in, out, err, state, args);
+                bool condition = state.if_state.back().active;
+                state.if_state.pop_back();
+                state.if_state.back().active = condition;
+            }
+        }
+        else
+        {
+            err << "Syntax error: else does not take any arguments (except when of the form 'else if')\n";
+            state.error = true;
+            return -1;
+        }
+    }
+    else
+    {
+        state.if_state.back().active ^= true;
+    }
+
     return 0;
 }
 
@@ -53,10 +79,24 @@ int endif_commandlet(istream& in, ostream& out, ostream& err, global_state& stat
 {
     (void)in;
     (void)out;
-    (void)err;
-    (void)state;
     (void)args;
-    //TODO
+
+    if (args.size() != 0)
+    {
+        err << "Syntax error: endif does not take any arguments";
+        state.error = true;
+        return -1;
+    }
+
+    if (state.if_state.size() == 0)
+    {
+        err << "Syntax error: endif without preceding if\n";
+        state.error = true;
+        return -1;
+    }
+
+    state.if_state.pop_back();
+
     return 0;
 }
 
@@ -120,6 +160,14 @@ struct program_line
 
     int execute(istream& in, ostream& out, ostream& err, global_state& global_state)
     {
+        if ((!global_state.if_state.size() == 0)
+            && !global_state.if_state.back().active
+            && (command != "else")
+            && (command != "endif"))
+        {
+            return 0;
+        }
+
         auto pos = special_functions.find(command);
         if (pos != special_functions.end())
         {
@@ -138,12 +186,17 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 {
     int exitCode = 0;
     program_line command;
+
     bool escape = false;
+
     bool in_string = false;
     bool in_string_singlequote = false; // disables variable interpolation
+
     bool variable_pending = false;
-    bool in_comment = false;
     string::size_type variable_dollar_pos = 0;
+
+    bool in_comment = false;
+
     enum class readstate
     {
         reading_command,
@@ -217,7 +270,37 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
             switch (c)
             {
             case '\n':
-                if (!command.command.empty())
+                if (!command.command.empty() && (command.args.size() > 0) && command.args.back().empty())
+                {
+                    // Remove the empty last argument if present.
+                    command.args.pop_back();
+                }
+
+                if (!command.special.empty())
+                {
+                    if (command.command.empty())
+                    {
+                        cerr << "Syntax error: " << command.special << " must be followed by a command.\n";
+                        if (global_state.interactive)
+                        {
+                            command.reset();
+                            state = readstate::reading_command;
+                        }
+                        else
+                        {
+                            exitCode = 3;
+                            global_state.error = true;
+                        }
+                    }
+
+                    command.print(out); // DEBUG
+
+                    //TODO
+
+                    command.reset();
+                    state = readstate::reading_command;
+                }
+                else if (!command.command.empty())
                 {
                     command.print(out); //DEBUG
 
@@ -230,20 +313,6 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 
                     command.reset();
                     state = readstate::reading_command;
-                }
-                else if (!command.special.empty())
-                {
-                    cerr << "Syntax error: " << command.special << " must be followed by a command.\n";
-                    if (global_state.interactive)
-                    {
-                        command.reset();
-                        state = readstate::reading_command;
-                    }
-                    else
-                    {
-                        exitCode = 3;
-                        global_state.error = true;
-                    }
                 }
 
                 if (in_comment)
@@ -338,7 +407,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 break;
 
             case '$':
-                if (!in_string_singlequote && !variable_pending)
+                if (!in_string_singlequote && !variable_pending && command.special.empty())
                 {
                     variable_pending = true;
                     variable_dollar_pos = (state == readstate::reading_command) ? command.command.size() : command.args.back().size();

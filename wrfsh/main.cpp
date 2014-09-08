@@ -5,6 +5,7 @@
 #include <fstream>
 #include <unordered_map>
 
+#include "common.h"
 #include "global_state.h"
 #include "repl.h"
 
@@ -15,9 +16,7 @@ int real_main(int argc, char *argv[], char *envp[])
     int exitCode;
     try
     {
-        //argc = 1;
-
-        global_state gs(envp);
+        global_state gs(argc, argv, envp);
 
         if (argc == 2)
         {
