@@ -1,0 +1,3 @@
+let foo = Hello
+let bar = world
+echo wrfsh says: "$foo, $bar!"
