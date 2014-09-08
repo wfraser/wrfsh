@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <iostream>
+#include <fstream>
 #include <unordered_map>
 
 #include "global_state.h"
@@ -11,8 +12,6 @@ using namespace std;
 
 int real_main(int argc, char *argv[], char *envp[])
 {
-    (void)(argc, argv, envp);
-
     int exitCode;
     try
     {

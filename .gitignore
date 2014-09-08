@@ -212,3 +212,9 @@ $RECYCLE.BIN/
 *.msi
 *.msm
 *.msp
+
+# Linux build files
+*.o
+
+# vim temp files
+*.swp

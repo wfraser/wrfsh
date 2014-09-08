@@ -29,21 +29,33 @@ int let_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_state
 
 int if_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
 {
-    (void)(in, out, err, state, args);
+    (void)in;
+    (void)out;
+    (void)err;
+    (void)state;
+    (void)args;
     //TODO
     return 0;
 }
 
 int else_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
 {
-    (void)(in, out, err, state, args);
+    (void)in;
+    (void)out;
+    (void)err;
+    (void)state;
+    (void)args;
     //TODO
     return 0;
 }
 
 int endif_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
 {
-    (void)(in, out, err, state, args);
+    (void)in;
+    (void)out;
+    (void)err;
+    (void)state;
+    (void)args;
     //TODO
     return 0;
 }
@@ -132,12 +144,12 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
     bool variable_pending = false;
     bool in_comment = false;
     string::size_type variable_dollar_pos = 0;
-    enum class state
+    enum class readstate
     {
         reading_command,
         reading_args
     };
-    state state = state::reading_command;
+    readstate state = readstate::reading_command;
 
     for (;;)
     {
@@ -173,7 +185,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 
             if (variable_pending)
             {
-                string& s = (state == state::reading_command) ? command.command : command.args.back();
+                string& s = (state == readstate::reading_command) ? command.command : command.args.back();
 
                 string::size_type len = s.size() - variable_dollar_pos;
 
@@ -217,7 +229,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     global_state.let("?", buf);
 
                     command.reset();
-                    state = state::reading_command;
+                    state = readstate::reading_command;
                 }
                 else if (!command.special.empty())
                 {
@@ -225,7 +237,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     if (global_state.interactive)
                     {
                         command.reset();
-                        state = state::reading_command;
+                        state = readstate::reading_command;
                     }
                     else
                     {
@@ -244,11 +256,11 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
             case '\t':
                 if (!in_string)
                 {
-                    if (state == state::reading_command && !command.command.empty())
+                    if (state == readstate::reading_command && !command.command.empty())
                     {
-                        state = state::reading_args;
+                        state = readstate::reading_args;
                     }
-                    else if (state == state::reading_args && !command.args.back().empty())
+                    else if (state == readstate::reading_args && !command.args.back().empty())
                     {
                         command.args.emplace_back();
                     }
@@ -329,13 +341,13 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 if (!in_string_singlequote && !variable_pending)
                 {
                     variable_pending = true;
-                    variable_dollar_pos = (state == state::reading_command) ? command.command.size() : command.args.back().size();
+                    variable_dollar_pos = (state == readstate::reading_command) ? command.command.size() : command.args.back().size();
                 }
                 goto normal;
 
             normal:
             default:
-                if (state == state::reading_command)
+                if (state == readstate::reading_command)
                 {
                     command.command.push_back(c);
                 }
