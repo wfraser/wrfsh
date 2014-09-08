@@ -130,6 +130,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
     bool in_string = false;
     bool in_string_singlequote = false; // disables variable interpolation
     bool variable_pending = false;
+    bool in_comment = false;
     string::size_type variable_dollar_pos = 0;
     enum class state
     {
@@ -162,6 +163,12 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 // Add a newline in case EOF came at the end of a line.
                 // We'll terminate at the end of this loop iteration.
                 c = '\n';
+            }
+
+            if (in_comment && c != '\n')
+            {
+                // Comments continue to the end of the line.
+                continue;
             }
 
             if (variable_pending)
@@ -226,6 +233,11 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                         global_state.error = true;
                     }
                 }
+
+                if (in_comment)
+                {
+                    in_comment = false;
+                }
                 break;
 
             case ' ':
@@ -246,6 +258,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 {
                     goto normal;
                 }
+
+            case '#':
+                in_comment = true;
+                break;
 
             case '\'':
                 if (in_string)
