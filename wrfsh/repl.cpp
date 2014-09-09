@@ -3,6 +3,9 @@
 #include <vector>
 #include <unordered_map>
 #include <locale>
+#include <memory>
+#include <algorithm>
+#include <functional>
 
 #include "common.h"
 #include "global_state.h"
@@ -24,17 +27,353 @@ int let_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_state
     return 0;
 }
 
-int if_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
+string process_expression(const string expression, global_state& global_state)
 {
-    (void)in;
-    (void)out;
-    (void)err;
-    (void)args;
+    string result;
 
-    //TODO
+    bool variable_pending = false;
+    size_t var_substitution_start_pos = 0;
+    bool backtick_pending = false;
+    size_t bt_substitution_start_pos = 0;
+    bool in_string = false;
+    bool in_string_singlequote = false;
+    bool escape = false;
+    for (size_t i = 0, n = expression.size(); i < n; i++)
+    {
+        const char c = expression[i];
+
+        if (variable_pending)
+        {
+            string::size_type len = result.size() - var_substitution_start_pos;
+
+            // if not ~ /[a-zA-Z][a-zA-Z0-9]*/
+            if (len > 1 && ((len == 2) ? !isalpha(c, locale::classic()) : !isalnum(c, locale::classic())))
+            {
+                // A variable was ended.
+                string varname = result.substr(var_substitution_start_pos + 1, len - 1);
+                string value = global_state.lookup_var(varname);
+                result.replace(var_substitution_start_pos, len, value);
+                variable_pending = false;
+            }
+        }
+
+        if (escape)
+        {
+            goto normal;
+        }
+
+        switch (c)
+        {
+        case '"':
+            if (!in_string)
+            {
+                in_string = true;
+            }
+            else if (!in_string_singlequote)
+            {
+                in_string = false;
+            }
+            else
+            {
+                goto normal;
+            }
+            break;
+
+        case '\'':
+            if (!in_string)
+            {
+                in_string = true;
+                in_string_singlequote = true;
+            }
+            else if (in_string_singlequote)
+            {
+                in_string = false;
+                in_string_singlequote = false;
+            }
+            else
+
+            {
+                goto normal;
+            }
+            break;
+
+        case '`':
+            if (!in_string_singlequote)
+            {
+                if (backtick_pending)
+                {
+                    backtick_pending = false;
+                    string command_line = result.substr(bt_substitution_start_pos);
+                    // TODO: run command, substitute output
+                    string output = "command output";
+                    result.replace(bt_substitution_start_pos, result.size(), output);
+                }
+                else
+                {
+                    backtick_pending = true;
+                    bt_substitution_start_pos = result.size();
+                }
+            }
+            else
+            {
+                goto normal;
+            }
+
+        case '$':
+            if (!in_string_singlequote)
+            {
+                variable_pending = true;
+                var_substitution_start_pos = result.size();
+            }
+            else
+            {
+                goto normal;
+            }
+            break;
+
+        case '\\':
+            escape = true;
+            break;
+
+        normal:
+        default:
+            result.push_back(c);
+            escape = false;
+            break;
+        }
+    }
+
+    return result;
+}
+
+int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& global_state, vector<string>& args)
+{
+    // EBNF:
+    // initial = "if" , comparison ;
+    // comparisons = comparison , { logic_operator , comparison } ;
+    // comparison = "( " , expression , operator , expression , " )"
+    //            | expression, operator, expression ;
+    // expression = "`" , ? command_line ? , "`"
+    //            | ? string ?
+    //            | "$" , variable_name ;
+    // operator = "==" | "!=" | "<" | "<=" | ">" | ">=" | "~" | "!~" ;
+    // logic_operator = "&&" | "||" ;
+    // variable_name = [a-zA-Z0-9]*
+
+    struct comparison
+    {
+        string expression1;
+        string op;
+        string expression2;
+    };
+
+    struct expression;
+    struct compound_expression
+    {
+        unique_ptr<expression> expr1;
+        string op;
+        unique_ptr<expression> expr2;
+    };
+
+    struct expression
+    {
+        enum class type { empty, comparison, compound_expression };
+        type expression_type;
+        unique_ptr<comparison> comparison;
+        unique_ptr<compound_expression> compound_expression;
+    };
+
+    function<void(ostream&, expression&, int)> printAST =
+        [&printAST](ostream& out, expression& exp, int nesting_level) -> void
+    {
+        out << string(nesting_level * 4, ' ')
+            << "expression type ";
+        if (exp.expression_type == expression::type::empty)
+        {
+            out << "empty\n";
+        }
+        else if (exp.expression_type == expression::type::comparison)
+        {
+            out << "comparison:\n";
+            out << string((nesting_level + 1) * 4, ' ') << exp.comparison->expression1 << endl;
+            out << string((nesting_level + 1) * 4, ' ') << exp.comparison->op << endl;
+            out << string((nesting_level + 1) * 4, ' ') << exp.comparison->expression2 << endl;
+        }
+        else if (exp.expression_type == expression::type::compound_expression)
+        {
+            out << "compound:\n";
+            auto e1 = exp.compound_expression->expr1.get();
+            if (e1 == nullptr)
+            {
+                out << string((nesting_level + 1) * 4, ' ') << "null\n";
+            }
+            else
+            {
+                printAST(out, *e1, nesting_level + 1);
+            }
+
+            out << string((nesting_level + 1) * 4, ' ') << exp.compound_expression->op << endl;
+
+            auto e2 = exp.compound_expression->expr2.get();
+            if (e2 == nullptr)
+            {
+                out << string((nesting_level + 1) * 4, ' ') << "null\n";
+            }
+            else
+            {
+                printAST(out, *e2, nesting_level + 1);
+            }
+        }
+        else
+        {
+            out << "unknown!\n";
+        }
+    };
+
+    const vector<string> operators({ "==", "!=", "<", "<=", ">", ">=", "~", "!~" });
+    const vector<string> logic_operators({ "&&", "||" });
+
+    enum class state
+    {
+        expression1, comparison1, comparison2, expression2
+    };
+    state s = state::expression1;
+
+    expression root_expression({});
+    vector<expression*> stack({ &root_expression });
+
+    for (size_t i = 0, n = args.size(); i < n; i++)
+    {
+        string arg = args[i];
+
+        // DEBUG: print the AST at each iteration
+        out << i << " ===========================================\n";
+        printAST(out, root_expression, 0);
+
+        if (stack.size() == 0)
+        {
+            err << "Syntax error: unexpected \"" << arg << "\". The 'if' expression is already complete.\n";
+            global_state.error = true;
+            return -1;
+        }
+
+        switch (s)
+        {
+        case state::expression1:
+
+            if (arg == "(")
+            {
+                stack.back()->expression_type = expression::type::compound_expression;
+                stack.back()->compound_expression = make_unique<compound_expression>();
+                stack.back()->compound_expression->expr1 = make_unique<expression>();
+                stack.push_back(stack.back()->compound_expression->expr1.get());
+            }
+            else if (arg == ")")
+            {
+                if (stack.back()->expression_type != expression::type::compound_expression)
+                {
+                    err << "Syntax error: unexpected \")\" found when not in a compound expression.\n";
+                    global_state.error = true;
+                    //return -1;
+                }
+                else if (stack.back()->compound_expression->expr1 == nullptr)
+                {
+                    err << "Syntax error: unexpected \")\" found; expected an expression.\n";
+                    global_state.error = true;
+                    //return -1;
+                }
+                else if (stack.back()->compound_expression->expr2 == nullptr)
+                {
+                    err << "Syntax error: unexpected \")\" found after only one half of a compound expression.\n";
+                    global_state.error = true;
+                    //return -1;
+                }
+                else
+                {
+                    stack.pop_back();
+                    if (stack.size() > 0
+                        && stack.back()->expression_type == expression::type::compound_expression
+                        && stack.back()->compound_expression->expr1 != nullptr)
+                    {
+                        s = state::expression2;
+                    }
+                }
+            }
+            else
+            {
+                stack.back()->expression_type = expression::type::comparison;
+                stack.back()->comparison = make_unique<comparison>();
+                stack.back()->comparison->expression1 = arg;
+                s = state::comparison1;
+            }
+            break;
+
+        case state::comparison1:
+
+            if (find(operators.begin(), operators.end(), arg) != operators.end())
+            {
+                stack.back()->comparison->op = arg;
+                s = state::comparison2;
+            }
+            else
+            {
+                err << "Syntax error: expected comparison operator, found \"" << arg << "\" instead.\n";
+                global_state.error = true;
+                //return -1;
+            }
+            break;
+
+        case state::comparison2:
+
+            stack.back()->comparison->expression2 = arg;
+            s = state::expression2;
+            break;
+
+        case state::expression2:
+
+            if (find(logic_operators.begin(), logic_operators.end(), arg) != logic_operators.end())
+            {
+                if (stack.back()->expression_type == expression::type::comparison)
+                {
+                    stack.back()->expression_type = expression::type::compound_expression;
+                    stack.back()->compound_expression = make_unique<compound_expression>();
+                    stack.back()->compound_expression->expr1 = make_unique<expression>();
+                    stack.back()->compound_expression->expr1->expression_type = expression::type::comparison;
+                    stack.back()->compound_expression->expr1->comparison.swap(stack.back()->comparison);
+                    stack.back()->compound_expression->op = arg;
+                    stack.back()->compound_expression->expr2 = make_unique<expression>();
+                    stack.push_back(stack.back()->compound_expression->expr2.get());
+                    s = state::expression1;
+                }
+                else if (stack.back()->expression_type == expression::type::compound_expression)
+                {
+                    stack.back()->compound_expression->expr2 = make_unique<expression>();
+                    stack.push_back(stack.back()->compound_expression->expr2.get());
+                    s = state::expression1;
+                }
+                else
+                {
+                    err << "Internal error. Expression type is bad in state expression2. This is a bug!\n";
+                    global_state.error = true;
+                    //return -1;
+                }
+            }
+            break;
+        }
+
+        if (global_state.error)
+        {
+            return -1;
+        }
+    }
+
+    //DEBUG print AST
+    printAST(out, root_expression, 0);
+
+    //TODO: evaluate the AST we just built
     bool if_result = false;
 
-    state.if_state.push_back({ if_result });
+    global_state.if_state.push_back({ if_result });
 
     return 0;
 }
@@ -54,7 +393,8 @@ int else_commandlet(istream& in, ostream& out, ostream& err, global_state& state
         {
             if (!state.if_state.back().active)
             {
-                if_commandlet(in, out, err, state, args);
+                vector<string> args2(args.begin() + 1, args.end());
+                if_commandlet(in, out, err, state, args2);
                 bool condition = state.if_state.back().active;
                 state.if_state.pop_back();
                 state.if_state.back().active = condition;
@@ -75,12 +415,8 @@ int else_commandlet(istream& in, ostream& out, ostream& err, global_state& state
     return 0;
 }
 
-int endif_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
+int endif_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_state& state, vector<string>& args)
 {
-    (void)in;
-    (void)out;
-    (void)args;
-
     if (args.size() != 0)
     {
         err << "Syntax error: endif does not take any arguments";
@@ -381,6 +717,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     {
                         in_string = false;
                         in_string_singlequote = false;
+                        if (!command.special.empty())
+                        {
+                            goto normal;
+                        }
                     }
                     else
                     {
@@ -391,6 +731,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 {
                     in_string = true;
                     in_string_singlequote = true;
+                    if (!command.special.empty())
+                    {
+                        goto normal;
+                    }
                 }
                 break;
 
@@ -400,6 +744,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     if (!in_string_singlequote)
                     {
                         in_string = false;
+                        if (!command.special.empty())
+                        {
+                            goto normal;
+                        }
                     }
                     else
                     {
@@ -409,6 +757,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 else
                 {
                     in_string = true;
+                    if (!command.special.empty())
+                    {
+                        goto normal;
+                    }
                 }
                 break;
 
@@ -434,6 +786,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 
             case '\\':
                 escape = true;
+                if (!command.special.empty())
+                {
+                    goto normal;
+                }
                 break;
 
             case '$':

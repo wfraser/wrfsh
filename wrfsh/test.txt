@@ -1,7 +1,11 @@
 let foo = Hello
 let bar = world
 
-10 echo $foo $bar
+if $foo == $bar || `hello` == ""
+echo
+endif
+
+10 echo "$foo $bar"
 20 echo hello
 30 echo lol
 20
