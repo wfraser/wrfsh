@@ -11,7 +11,8 @@ global_state::global_state(int argc, const char * const argv [], const char * co
     error(false),
     environment({}),
     local_vars({}),
-    if_state({})
+    if_state({}),
+    stored_program({})
 {
     char buf[10];
     for (int i = 0; i < argc; i++)
@@ -70,4 +71,9 @@ void global_state::let(string key, string value)
     {
         pos.first->second = value;
     }
+}
+
+int global_state::program_line_comp(global_state::program_line& a, global_state::program_line& b)
+{
+    return atoi(a.number.c_str()) < atoi(b.number.c_str());
 }

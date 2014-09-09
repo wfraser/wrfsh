@@ -112,6 +112,19 @@ int echo_commandlet(istream& /*in*/, ostream& out, ostream& /*err*/, global_stat
     return 0;
 }
 
+int list_commandlet(istream& /*in*/, ostream& out, ostream& /*err*/, global_state& state, vector<string>& /*args*/)
+{
+    for (const auto& line : state.stored_program)
+    {
+        out << line.number << " " << line.command;
+        for (size_t i = 0, n = line.args.size(); i < n; i++)
+        {
+            out << " " << line.args.at(i) << ((i == n - 1) ? "\n" : "");
+        }
+    }
+    return 0;
+}
+
 #define DEFINE_COMMANDLET(name) { #name, name##_commandlet }
 
 unordered_map<string, commandlet_function> special_functions(
@@ -121,6 +134,7 @@ unordered_map<string, commandlet_function> special_functions(
     DEFINE_COMMANDLET(else),
     DEFINE_COMMANDLET(endif),
     DEFINE_COMMANDLET(echo),
+    DEFINE_COMMANDLET(list),
 });
 
 struct program_line
@@ -278,24 +292,40 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 
                 if (!command.special.empty())
                 {
-                    if (command.command.empty())
+                    int number = atoi(command.special.c_str());
+                    bool found = false;
+
+                    auto it = global_state.stored_program.begin();
+
+                    for (auto end = global_state.stored_program.end(); it != end; ++it)
                     {
-                        cerr << "Syntax error: " << command.special << " must be followed by a command.\n";
-                        if (global_state.interactive)
+                        int current = atoi(it->number.c_str());
+
+                        if (command.command.empty())
                         {
-                            command.reset();
-                            state = readstate::reading_command;
+                            if (current == number)
+                            {
+                                global_state.stored_program.erase(it);
+                                break;
+                            }
                         }
-                        else
+                        else if (current == number)
                         {
-                            exitCode = 3;
-                            global_state.error = true;
+                            it->command = move(command.command);
+                            it->args = move(command.args);
+                            found = true;
+                        }
+                        else if (current > number)
+                        {
+                            // Keep the current iterator position.
+                            break;
                         }
                     }
 
-                    command.print(out); // DEBUG
-
-                    //TODO
+                    if (!found && !command.command.empty())
+                    {
+                        global_state.stored_program.emplace(it, move(command.special), move(command.command), move(command.args));
+                    }
 
                     command.reset();
                     state = readstate::reading_command;

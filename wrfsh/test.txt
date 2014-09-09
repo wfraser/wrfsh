@@ -2,6 +2,11 @@ let foo = Hello
 let bar = world
 
 10 echo $foo $bar
+20 echo hello
+30 echo lol
+20
+30 echo world
+list
 
 if $foo == $bar
 	echo no
