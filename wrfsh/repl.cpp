@@ -178,6 +178,9 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
         Type type;
         unique_ptr<Comparison> comparison;
         unique_ptr<CompoundExpression> compound_expression;
+
+        Expression() : type(Type::Empty)
+        {}
     };
 
     function<void(ostream&, Expression&, int)> printAST =
@@ -258,7 +261,14 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
         {
         case State::Expression1:
 
-            if (arg == ")")
+            if (arg == "(")
+            {
+                stack.back()->type = Expression::Type::CompoundExpression;
+                stack.back()->compound_expression = make_unique<CompoundExpression>();
+                stack.back()->compound_expression->expr1 = make_unique<Expression>();
+                stack.push_back(stack.back()->compound_expression->expr1.get());
+            }
+            else if (arg == ")")
             {
                 if (stack.back()->type != Expression::Type::CompoundExpression)
                 {
@@ -324,7 +334,25 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
 
         case State::Expression2:
 
-            if (find(logic_operators.begin(), logic_operators.end(), arg) != logic_operators.end())
+            if (arg == ")")
+            {
+                stack.pop_back();
+                if (stack.size() > 0)
+                {
+                    if (stack.back()->type == Expression::Type::CompoundExpression
+                        && stack.back()->compound_expression->expr1 != nullptr
+                        && stack.back()->compound_expression->expr2 == nullptr)
+                    {
+                        s = State::Expression2;
+                    }
+                    else
+                    {
+                        stack.pop_back();
+                        s = State::Expression2;
+                    }
+                }
+            }
+            else if (find(logic_operators.begin(), logic_operators.end(), arg) != logic_operators.end())
             {
                 if (stack.back()->type == Expression::Type::Comparison)
                 {
@@ -340,6 +368,7 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
                 }
                 else if (stack.back()->type == Expression::Type::CompoundExpression)
                 {
+                    stack.back()->compound_expression->op = arg;
                     stack.back()->compound_expression->expr2 = make_unique<Expression>();
                     stack.push_back(stack.back()->compound_expression->expr2.get());
                     s = State::Expression1;
@@ -361,8 +390,7 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
     }
 
     //DEBUG print AST
-    //printAST(out, root_expression, 0);
-    (void) out;
+    printAST(out, root_expression, 0);
 
     //TODO: evaluate the AST we just built
     bool if_result = false;
