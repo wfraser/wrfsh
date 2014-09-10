@@ -247,8 +247,8 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
         string arg = args[i];
 
         // DEBUG: print the AST at each iteration
-        out << i << " ===========================================\n";
-        printAST(out, root_expression, 0);
+        //out << i << " ===========================================\n";
+        //printAST(out, root_expression, 0);
 
         if (stack.size() == 0)
         {
@@ -261,14 +261,7 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
         {
         case state::expression1:
 
-            if (arg == "(")
-            {
-                stack.back()->expression_type = expression::type::compound_expression;
-                stack.back()->compound_expression = make_unique<compound_expression>();
-                stack.back()->compound_expression->expr1 = make_unique<expression>();
-                stack.push_back(stack.back()->compound_expression->expr1.get());
-            }
-            else if (arg == ")")
+            if (arg == ")")
             {
                 if (stack.back()->expression_type != expression::type::compound_expression)
                 {
@@ -303,8 +296,11 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
             {
                 stack.back()->expression_type = expression::type::comparison;
                 stack.back()->comparison = make_unique<comparison>();
-                stack.back()->comparison->expression1 = arg;
-                s = state::comparison1;
+                if (arg != "(")
+                {
+                    stack.back()->comparison->expression1 = arg;
+                    s = state::comparison1;
+                }
             }
             break;
 
@@ -540,10 +536,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
     bool escape = false;
 
     bool in_string = false;
-    bool in_string_singlequote = false; // disables variable interpolation
-
-    bool variable_pending = false;
-    string::size_type variable_dollar_pos = 0;
+    bool in_string_singlequote = false;
 
     bool in_comment = false;
 
@@ -584,23 +577,6 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
             {
                 // Comments continue to the end of the line.
                 continue;
-            }
-
-            if (variable_pending)
-            {
-                string& s = (state == readstate::reading_command) ? command.command : command.args.back();
-
-                string::size_type len = s.size() - variable_dollar_pos;
-
-                // if not ~ /[a-zA-Z][a-zA-Z0-9]*/
-                if (len > 1 && ((len == 2) ? !isalpha(c, locale::classic()) : !isalnum(c, locale::classic())))
-                {
-                    // A variable was ended.
-                    string varname = s.substr(variable_dollar_pos + 1, len - 1);
-                    string value = global_state.lookup_var(varname);
-                    s.replace(variable_dollar_pos, len, value);
-                    variable_pending = false;
-                }
             }
 
             if (escape)
@@ -717,26 +693,14 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     {
                         in_string = false;
                         in_string_singlequote = false;
-                        if (!command.special.empty())
-                        {
-                            goto normal;
-                        }
-                    }
-                    else
-                    {
-                        goto normal;
                     }
                 }
                 else
                 {
                     in_string = true;
                     in_string_singlequote = true;
-                    if (!command.special.empty())
-                    {
-                        goto normal;
-                    }
                 }
-                break;
+                goto normal;
 
             case '"':
                 if (in_string)
@@ -744,25 +708,17 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     if (!in_string_singlequote)
                     {
                         in_string = false;
-                        if (!command.special.empty())
-                        {
-                            goto normal;
-                        }
-                    }
-                    else
-                    {
-                        goto normal;
                     }
                 }
                 else
                 {
                     in_string = true;
-                    if (!command.special.empty())
-                    {
-                        goto normal;
-                    }
                 }
-                break;
+                goto normal;
+
+            case '`':
+                //TODO
+                goto normal;
 
             case '0':
             case '1':
@@ -791,14 +747,6 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     goto normal;
                 }
                 break;
-
-            case '$':
-                if (!in_string_singlequote && !variable_pending && command.special.empty())
-                {
-                    variable_pending = true;
-                    variable_dollar_pos = (state == readstate::reading_command) ? command.command.size() : command.args.back().size();
-                }
-                goto normal;
 
             normal:
             default:
