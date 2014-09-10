@@ -1,6 +1,6 @@
-CXXFLAGS=-std=c++11 -Wall -Werror -pedantic
+CXXFLAGS=-std=c++14 -Wall -Werror -pedantic
 
-OBJS=main.o repl.o
+OBJS=main.o repl.o global_state.o
 
 all: wrfsh
 

@@ -1,5 +1,7 @@
 #include <string>
+#include <vector>
 #include <unordered_map>
+#include <list>
 
 #include "common.h"
 #include "global_state.h"
@@ -11,8 +13,8 @@ global_state::global_state(int argc, const char * const argv [], const char * co
     error(false),
     environment({}),
     local_vars({}),
-    if_state({}),
-    stored_program({})
+    stored_program({}),
+    if_state({})
 {
     char buf[10];
     for (int i = 0; i < argc; i++)

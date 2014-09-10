@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <list>
 #include <locale>
 #include <memory>
 #include <algorithm>
@@ -156,46 +157,46 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
     // logic_operator = "&&" | "||" ;
     // variable_name = [a-zA-Z0-9]*
 
-    struct comparison
+    struct Comparison
     {
         string expression1;
         string op;
         string expression2;
     };
 
-    struct expression;
-    struct compound_expression
+    struct Expression;
+    struct CompoundExpression
     {
-        unique_ptr<expression> expr1;
+        unique_ptr<Expression> expr1;
         string op;
-        unique_ptr<expression> expr2;
+        unique_ptr<Expression> expr2;
     };
 
-    struct expression
+    struct Expression
     {
-        enum class type { empty, comparison, compound_expression };
-        type expression_type;
-        unique_ptr<comparison> comparison;
-        unique_ptr<compound_expression> compound_expression;
+        enum class Type { Empty, Comparison, CompoundExpression };
+        Type type;
+        unique_ptr<Comparison> comparison;
+        unique_ptr<CompoundExpression> compound_expression;
     };
 
-    function<void(ostream&, expression&, int)> printAST =
-        [&printAST](ostream& out, expression& exp, int nesting_level) -> void
+    function<void(ostream&, Expression&, int)> printAST =
+        [&printAST](ostream& out, Expression& exp, int nesting_level) -> void
     {
         out << string(nesting_level * 4, ' ')
             << "expression type ";
-        if (exp.expression_type == expression::type::empty)
+        if (exp.type == Expression::Type::Empty)
         {
             out << "empty\n";
         }
-        else if (exp.expression_type == expression::type::comparison)
+        else if (exp.type == Expression::Type::Comparison)
         {
             out << "comparison:\n";
             out << string((nesting_level + 1) * 4, ' ') << exp.comparison->expression1 << endl;
             out << string((nesting_level + 1) * 4, ' ') << exp.comparison->op << endl;
             out << string((nesting_level + 1) * 4, ' ') << exp.comparison->expression2 << endl;
         }
-        else if (exp.expression_type == expression::type::compound_expression)
+        else if (exp.type == Expression::Type::CompoundExpression)
         {
             out << "compound:\n";
             auto e1 = exp.compound_expression->expr1.get();
@@ -229,14 +230,14 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
     const vector<string> operators({ "==", "!=", "<", "<=", ">", ">=", "~", "!~" });
     const vector<string> logic_operators({ "&&", "||" });
 
-    enum class state
+    enum class State
     {
-        expression1, comparison1, comparison2, expression2
+        Expression1, Comparison1, Comparison2, Expression2
     };
-    state s = state::expression1;
+    State s = State::Expression1;
 
-    expression root_expression({});
-    vector<expression*> stack({ &root_expression });
+    Expression root_expression({});
+    vector<Expression*> stack({ &root_expression });
 
     for (size_t i = 0, n = args.size(); i < n; i++)
     {
@@ -255,11 +256,11 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
 
         switch (s)
         {
-        case state::expression1:
+        case State::Expression1:
 
             if (arg == ")")
             {
-                if (stack.back()->expression_type != expression::type::compound_expression)
+                if (stack.back()->type != Expression::Type::CompoundExpression)
                 {
                     err << "Syntax error: unexpected \")\" found when not in a compound expression.\n";
                     global_state.error = true;
@@ -281,31 +282,31 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
                 {
                     stack.pop_back();
                     if (stack.size() > 0
-                        && stack.back()->expression_type == expression::type::compound_expression
+                        && stack.back()->type == Expression::Type::CompoundExpression
                         && stack.back()->compound_expression->expr1 != nullptr)
                     {
-                        s = state::expression2;
+                        s = State::Expression2;
                     }
                 }
             }
             else
             {
-                stack.back()->expression_type = expression::type::comparison;
-                stack.back()->comparison = make_unique<comparison>();
+                stack.back()->type = Expression::Type::Comparison;
+                stack.back()->comparison = make_unique<Comparison>();
                 if (arg != "(")
                 {
                     stack.back()->comparison->expression1 = arg;
-                    s = state::comparison1;
+                    s = State::Comparison1;
                 }
             }
             break;
 
-        case state::comparison1:
+        case State::Comparison1:
 
             if (find(operators.begin(), operators.end(), arg) != operators.end())
             {
                 stack.back()->comparison->op = arg;
-                s = state::comparison2;
+                s = State::Comparison2;
             }
             else
             {
@@ -315,33 +316,33 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
             }
             break;
 
-        case state::comparison2:
+        case State::Comparison2:
 
             stack.back()->comparison->expression2 = arg;
-            s = state::expression2;
+            s = State::Expression2;
             break;
 
-        case state::expression2:
+        case State::Expression2:
 
             if (find(logic_operators.begin(), logic_operators.end(), arg) != logic_operators.end())
             {
-                if (stack.back()->expression_type == expression::type::comparison)
+                if (stack.back()->type == Expression::Type::Comparison)
                 {
-                    stack.back()->expression_type = expression::type::compound_expression;
-                    stack.back()->compound_expression = make_unique<compound_expression>();
-                    stack.back()->compound_expression->expr1 = make_unique<expression>();
-                    stack.back()->compound_expression->expr1->expression_type = expression::type::comparison;
+                    stack.back()->type = Expression::Type::CompoundExpression;
+                    stack.back()->compound_expression = make_unique<CompoundExpression>();
+                    stack.back()->compound_expression->expr1 = make_unique<Expression>();
+                    stack.back()->compound_expression->expr1->type = Expression::Type::Comparison;
                     stack.back()->compound_expression->expr1->comparison.swap(stack.back()->comparison);
                     stack.back()->compound_expression->op = arg;
-                    stack.back()->compound_expression->expr2 = make_unique<expression>();
+                    stack.back()->compound_expression->expr2 = make_unique<Expression>();
                     stack.push_back(stack.back()->compound_expression->expr2.get());
-                    s = state::expression1;
+                    s = State::Expression1;
                 }
-                else if (stack.back()->expression_type == expression::type::compound_expression)
+                else if (stack.back()->type == Expression::Type::CompoundExpression)
                 {
-                    stack.back()->compound_expression->expr2 = make_unique<expression>();
+                    stack.back()->compound_expression->expr2 = make_unique<Expression>();
                     stack.push_back(stack.back()->compound_expression->expr2.get());
-                    s = state::expression1;
+                    s = State::Expression1;
                 }
                 else
                 {

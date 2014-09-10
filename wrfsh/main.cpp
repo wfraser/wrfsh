@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
+#include <list>
 
 #include "common.h"
 #include "global_state.h"
