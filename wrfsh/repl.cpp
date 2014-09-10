@@ -125,11 +125,7 @@ string process_expression(const string expression, global_state& global_state)
                 variable_pending = true;
                 var_substitution_start_pos = result.size();
             }
-            else
-            {
-                goto normal;
-            }
-            break;
+            goto normal;
 
         case '\\':
             escape = true;
@@ -364,7 +360,8 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
     }
 
     //DEBUG print AST
-    printAST(out, root_expression, 0);
+    //printAST(out, root_expression, 0);
+    (void) out;
 
     //TODO: evaluate the AST we just built
     bool if_result = false;
@@ -514,17 +511,39 @@ struct program_line
             return 0;
         }
 
+        vector<string> new_args;
+        bool args_processed = false;
+        if (command != "if" && command != "else") // these use the un-processed strings
+        {
+            // Do string interpolation, backtick expansion, etc.
+            for (const auto& arg : args)
+            {
+                new_args.push_back(process_expression(arg, global_state));
+            }
+            args_processed = true;
+            swap(args, new_args);
+        }
+
+        int retval;
+
         auto pos = special_functions.find(command);
         if (pos != special_functions.end())
         {
-            return pos->second(in, out, err, global_state, args);
+            retval = pos->second(in, out, err, global_state, args);
         }
         else
         {
             // Not a commandlet.
             //TODO run the command
-            return 99;
+            retval = 99;
         }
+
+        if (args_processed)
+        {
+            swap(args, new_args);
+        }
+
+        return retval;
     }
 };
 
