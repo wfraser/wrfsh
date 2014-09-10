@@ -13,20 +13,8 @@
 
 using namespace std;
 
-int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& global_state, vector<string>& args)
+namespace IfExpression
 {
-    // EBNF:
-    // initial = "if" , comparison ;
-    // comparisons = comparison , { logic_operator , comparison } ;
-    // comparison = "( " , expression , operator , expression , " )"
-    //            | expression, operator, expression ;
-    // expression = "`" , ? command_line ? , "`"
-    //            | ? string ?
-    //            | "$" , variable_name ;
-    // operator = "==" | "!=" | "<" | "<=" | ">" | ">=" | "~" | "!~" ;
-    // logic_operator = "&&" | "||" ;
-    // variable_name = [a-zA-Z0-9]*
-
     struct Comparison
     {
         string expression1;
@@ -53,8 +41,8 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
         {}
     };
 
-    function<void(ostream&, Expression&, int)> printAST =
-        [&printAST](ostream& out, Expression& exp, int nesting_level) -> void
+    
+    void PrintAST(ostream& out, Expression& exp, int nesting_level)
     {
         out << string(nesting_level * 4, ' ')
             << "expression type ";
@@ -79,7 +67,7 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
             }
             else
             {
-                printAST(out, *e1, nesting_level + 1);
+                PrintAST(out, *e1, nesting_level + 1);
             }
 
             out << string((nesting_level + 1) * 4, ' ') << exp.compound_expression->op << endl;
@@ -91,176 +79,194 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
             }
             else
             {
-                printAST(out, *e2, nesting_level + 1);
+                PrintAST(out, *e2, nesting_level + 1);
             }
         }
         else
         {
             out << "unknown!\n";
         }
-    };
+    }
 
-    const vector<string> operators({ "==", "!=", "<", "<=", ">", ">=", "~", "!~" });
-    const vector<string> logic_operators({ "&&", "||" });
-
-    enum class State
+    bool ParseIfExpression(const vector<string>& args, Expression& root_expression, ostream& err)
     {
-        Expression1, Comparison1, Comparison2, Expression2
-    };
-    State s = State::Expression1;
+        // EBNF:
+        // initial = "if" , comparison ;
+        // comparisons = comparison , { logic_operator , comparison } ;
+        // comparison = "( " , expression , operator , expression , " )"
+        //            | expression, operator, expression ;
+        // expression = "`" , ? command_line ? , "`"
+        //            | ? string ?
+        //            | "$" , variable_name ;
+        // operator = "==" | "!=" | "<" | "<=" | ">" | ">=" | "~" | "!~" ;
+        // logic_operator = "&&" | "||" ;
+        // variable_name = [a-zA-Z0-9]*
 
-    Expression root_expression = {};
-    vector<Expression*> stack({ &root_expression });
+        const vector<string> operators({ "==", "!=", "<", "<=", ">", ">=", "~", "!~" });
+        const vector<string> logic_operators({ "&&", "||" });
 
-    for (size_t i = 0, n = args.size(); i < n; i++)
-    {
-        string arg = args[i];
-
-        // DEBUG: print the AST at each iteration
-        //out << i << " ===========================================\n";
-        //printAST(out, root_expression, 0);
-
-        if (stack.size() == 0)
+        enum class State
         {
-            err << "Syntax error: unexpected \"" << arg << "\". The 'if' expression is already complete.\n";
-            global_state.error = true;
-            return -1;
-        }
+            Expression1, Comparison1, Comparison2, Expression2
+        };
+        State s = State::Expression1;
 
-        switch (s)
+        vector<Expression*> stack({ &root_expression });
+
+        for (size_t i = 0, n = args.size(); i < n; i++)
         {
-        case State::Expression1:
+            string arg = args[i];
 
-            if (arg == "(")
+            // DEBUG: print the AST at each iteration
+            //out << i << " ===========================================\n";
+            //PrintAST(out, root_expression, 0);
+
+            if (stack.size() == 0)
             {
-                stack.back()->type = Expression::Type::CompoundExpression;
-                stack.back()->compound_expression = make_unique<CompoundExpression>();
-                stack.back()->compound_expression->expr1 = make_unique<Expression>();
-                stack.push_back(stack.back()->compound_expression->expr1.get());
+                err << "Syntax error: unexpected \"" << arg << "\". The 'if' expression is already complete.\n";
+                return false;
             }
-            else if (arg == ")")
-            {
-                if (stack.back()->type != Expression::Type::CompoundExpression)
-                {
-                    err << "Syntax error: unexpected \")\" found when not in a compound expression.\n";
-                    global_state.error = true;
-                    //return -1;
-                }
-                else if (stack.back()->compound_expression->expr1 == nullptr)
-                {
-                    err << "Syntax error: unexpected \")\" found; expected an expression.\n";
-                    global_state.error = true;
-                    //return -1;
-                }
-                else if (stack.back()->compound_expression->expr2 == nullptr)
-                {
-                    err << "Syntax error: unexpected \")\" found after only one half of a compound expression.\n";
-                    global_state.error = true;
-                    //return -1;
-                }
-                else
-                {
-                    stack.pop_back();
-                    if (stack.size() > 0
-                        && stack.back()->type == Expression::Type::CompoundExpression
-                        && stack.back()->compound_expression->expr1 != nullptr)
-                    {
-                        s = State::Expression2;
-                    }
-                }
-            }
-            else
-            {
-                stack.back()->type = Expression::Type::Comparison;
-                stack.back()->comparison = make_unique<Comparison>();
-                if (arg != "(")
-                {
-                    stack.back()->comparison->expression1 = arg;
-                    s = State::Comparison1;
-                }
-            }
-            break;
 
-        case State::Comparison1:
-
-            if (find(operators.begin(), operators.end(), arg) != operators.end())
+            switch (s)
             {
-                stack.back()->comparison->op = arg;
-                s = State::Comparison2;
-            }
-            else
-            {
-                err << "Syntax error: expected comparison operator, found \"" << arg << "\" instead.\n";
-                global_state.error = true;
-                //return -1;
-            }
-            break;
+            case State::Expression1:
 
-        case State::Comparison2:
-
-            stack.back()->comparison->expression2 = arg;
-            s = State::Expression2;
-            break;
-
-        case State::Expression2:
-
-            if (arg == ")")
-            {
-                stack.pop_back();
-                if (stack.size() > 0)
-                {
-                    if (stack.back()->type == Expression::Type::CompoundExpression
-                        && stack.back()->compound_expression->expr1 != nullptr
-                        && stack.back()->compound_expression->expr2 == nullptr)
-                    {
-                        s = State::Expression2;
-                    }
-                    else
-                    {
-                        stack.pop_back();
-                        s = State::Expression2;
-                    }
-                }
-            }
-            else if (find(logic_operators.begin(), logic_operators.end(), arg) != logic_operators.end())
-            {
-                if (stack.back()->type == Expression::Type::Comparison)
+                if (arg == "(")
                 {
                     stack.back()->type = Expression::Type::CompoundExpression;
                     stack.back()->compound_expression = make_unique<CompoundExpression>();
                     stack.back()->compound_expression->expr1 = make_unique<Expression>();
-                    stack.back()->compound_expression->expr1->type = Expression::Type::Comparison;
-                    stack.back()->compound_expression->expr1->comparison.swap(stack.back()->comparison);
-                    stack.back()->compound_expression->op = arg;
-                    stack.back()->compound_expression->expr2 = make_unique<Expression>();
-                    stack.push_back(stack.back()->compound_expression->expr2.get());
-                    s = State::Expression1;
+                    stack.push_back(stack.back()->compound_expression->expr1.get());
                 }
-                else if (stack.back()->type == Expression::Type::CompoundExpression)
+                else if (arg == ")")
                 {
-                    stack.back()->compound_expression->op = arg;
-                    stack.back()->compound_expression->expr2 = make_unique<Expression>();
-                    stack.push_back(stack.back()->compound_expression->expr2.get());
-                    s = State::Expression1;
+                    if (stack.back()->type != Expression::Type::CompoundExpression)
+                    {
+                        err << "Syntax error: unexpected \")\" found when not in a compound expression.\n";
+                        return false;
+                    }
+                    else if (stack.back()->compound_expression->expr1 == nullptr)
+                    {
+                        err << "Syntax error: unexpected \")\" found; expected an expression.\n";
+                        return false;
+                    }
+                    else if (stack.back()->compound_expression->expr2 == nullptr)
+                    {
+                        err << "Syntax error: unexpected \")\" found after only one half of a compound expression.\n";
+                        return false;
+                    }
+                    else
+                    {
+                        stack.pop_back();
+                        if (stack.size() > 0
+                            && stack.back()->type == Expression::Type::CompoundExpression
+                            && stack.back()->compound_expression->expr1 != nullptr)
+                        {
+                            s = State::Expression2;
+                        }
+                    }
                 }
                 else
                 {
-                    err << "Internal error. Expression type is bad in state expression2. This is a bug!\n";
-                    global_state.error = true;
-                    //return -1;
+                    stack.back()->type = Expression::Type::Comparison;
+                    stack.back()->comparison = make_unique<Comparison>();
+                    if (arg != "(")
+                    {
+                        stack.back()->comparison->expression1 = arg;
+                        s = State::Comparison1;
+                    }
                 }
+                break;
+
+            case State::Comparison1:
+
+                if (find(operators.begin(), operators.end(), arg) != operators.end())
+                {
+                    stack.back()->comparison->op = arg;
+                    s = State::Comparison2;
+                }
+                else
+                {
+                    err << "Syntax error: expected comparison operator, found \"" << arg << "\" instead.\n";
+                    return false;
+                }
+                break;
+
+            case State::Comparison2:
+
+                stack.back()->comparison->expression2 = arg;
+                s = State::Expression2;
+                break;
+
+            case State::Expression2:
+
+                if (arg == ")")
+                {
+                    stack.pop_back();
+                    if (stack.size() > 0)
+                    {
+                        if (stack.back()->type == Expression::Type::CompoundExpression
+                            && stack.back()->compound_expression->expr1 != nullptr
+                            && stack.back()->compound_expression->expr2 == nullptr)
+                        {
+                            s = State::Expression2;
+                        }
+                        else
+                        {
+                            stack.pop_back();
+                            s = State::Expression2;
+                        }
+                    }
+                }
+                else if (find(logic_operators.begin(), logic_operators.end(), arg) != logic_operators.end())
+                {
+                    if (stack.back()->type == Expression::Type::Comparison)
+                    {
+                        stack.back()->type = Expression::Type::CompoundExpression;
+                        stack.back()->compound_expression = make_unique<CompoundExpression>();
+                        stack.back()->compound_expression->expr1 = make_unique<Expression>();
+                        stack.back()->compound_expression->expr1->type = Expression::Type::Comparison;
+                        stack.back()->compound_expression->expr1->comparison.swap(stack.back()->comparison);
+                        stack.back()->compound_expression->op = arg;
+                        stack.back()->compound_expression->expr2 = make_unique<Expression>();
+                        stack.push_back(stack.back()->compound_expression->expr2.get());
+                        s = State::Expression1;
+                    }
+                    else if (stack.back()->type == Expression::Type::CompoundExpression)
+                    {
+                        stack.back()->compound_expression->op = arg;
+                        stack.back()->compound_expression->expr2 = make_unique<Expression>();
+                        stack.push_back(stack.back()->compound_expression->expr2.get());
+                        s = State::Expression1;
+                    }
+                    else
+                    {
+                        err << "Internal error. Expression type is bad in state expression2. This is a bug!\n";
+                        return false;
+                    }
+                }
+                break;
             }
-            break;
         }
 
-        if (global_state.error)
-        {
-            return -1;
-        }
+        return true;
+    }
+}
+
+int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& global_state, vector<string>& args)
+{
+    IfExpression::Expression root_expression;
+
+    bool successful_parse = IfExpression::ParseIfExpression(args, root_expression, err);
+
+    if (!successful_parse)
+    {
+        global_state.error = true;
+        return -1;
     }
 
     //DEBUG print AST
-    printAST(out, root_expression, 0);
+    IfExpression::PrintAST(out, root_expression, 0);
 
     //TODO: evaluate the AST we just built
     bool if_result = false;

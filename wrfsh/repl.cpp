@@ -14,7 +14,7 @@
 
 using namespace std;
 
-string process_expression(const string expression, global_state& global_state)
+string process_expression(const string& expression, global_state& global_state)
 {
     string result;
 
