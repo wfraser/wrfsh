@@ -1,4 +1,4 @@
-CXXFLAGS=-std=c++14 -Wall -Werror -pedantic
+CXXFLAGS=-std=c++1y -Wall -Werror -pedantic
 
 OBJS=main.o repl.o global_state.o
 

@@ -504,7 +504,7 @@ struct program_line
 
     int execute(istream& in, ostream& out, ostream& err, global_state& global_state)
     {
-        if ((!global_state.if_state.size() == 0)
+        if ((global_state.if_state.size() != 0)
             && !global_state.if_state.back().active
             && (command != "else")
             && (command != "endif"))
