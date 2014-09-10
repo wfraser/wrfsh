@@ -236,7 +236,7 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
     };
     State s = State::Expression1;
 
-    Expression root_expression({});
+    Expression root_expression = {};
     vector<Expression*> stack({ &root_expression });
 
     for (size_t i = 0, n = args.size(); i < n; i++)
