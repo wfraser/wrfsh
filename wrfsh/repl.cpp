@@ -25,7 +25,7 @@ string process_expression(const string& expression, global_state& global_state)
     bool in_string = false;
     bool in_string_singlequote = false;
     bool escape = false;
-    for (size_t i = 0, n = expression.size(); i < n; i++)
+    for (size_t i = 0, n = expression.size(); i <= n; i++)
     {
         const char c = expression[i];
 
@@ -33,14 +33,31 @@ string process_expression(const string& expression, global_state& global_state)
         {
             string::size_type len = result.size() - var_substitution_start_pos;
 
-            // if not ~ /[a-zA-Z][a-zA-Z0-9]*/
-            if (len > 1 && ((len == 2) ? !isalpha(c, locale::classic()) : !isalnum(c, locale::classic())))
+            static const string allowed_variable_special_characters = "#*@!_?$";
+            // $# = number of positional parameters
+            // $* = positional parameters strung together as a single word
+            // $@ = positional parameters *as separate words* (doesn't work yet)
+            // $! = PID of last job run in background (doesn't work yet)
+            // $_ = last positional parameter of previous command (doesn't work yet)
+            // $? = exit status of previous command
+            // $$ = current PID (doesn't work yet)
+
+            if (i == n
+                || (
+                    len > 1
+                    && !isalnum(c, locale::classic())
+                    && allowed_variable_special_characters.find(c) == string::npos))
             {
                 // A variable was ended.
                 string varname = result.substr(var_substitution_start_pos + 1, len - 1);
                 string value = global_state.lookup_var(varname);
                 result.replace(var_substitution_start_pos, len, value);
                 variable_pending = false;
+            }
+
+            if (i == n)
+            {
+                break;
             }
         }
 
@@ -107,7 +124,7 @@ string process_expression(const string& expression, global_state& global_state)
             }
 
         case '$':
-            if (!in_string_singlequote)
+            if (!in_string_singlequote && !variable_pending)
             {
                 variable_pending = true;
                 var_substitution_start_pos = result.size();

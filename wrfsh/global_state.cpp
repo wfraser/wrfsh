@@ -16,15 +16,12 @@ global_state::global_state(int argc, const char * const argv [], const char * co
     stored_program({}),
     if_state({})
 {
-    char buf[10];
     for (int i = 0; i < argc; i++)
     {
-        snprintf(buf, 10, "%d", i);
-        let(buf, argv[i]);
+        let(to_string(i), argv[i]);
     }
 
-    snprintf(buf, 10, "%d", argc);
-    let("#", buf);
+    let("#", to_string(argc - 1));
 
     let("?", "0");
 
@@ -53,6 +50,20 @@ global_state::global_state(int argc, const char * const argv [], const char * co
 
 std::string global_state::lookup_var(string key)
 {
+    // Special variables:
+    if (key == "*")
+    {
+        string result;
+
+        int n = atoi(local_vars["#"].c_str());
+        for (int i = 0; i < n; i++)
+        {
+            result += ((i != 0) ? " " : "") + local_vars[to_string(i+1)];
+        }
+
+        return result;
+    }
+
     auto pos = local_vars.find(key);
     if (pos != local_vars.end())
     {
