@@ -151,6 +151,7 @@
     <ClInclude Include="common.h" />
     <ClInclude Include="global_state.h" />
     <ClInclude Include="commandlets.h" />
+    <ClInclude Include="process.h" />
     <ClInclude Include="repl.h" />
     <ClInclude Include="unicodehack.h" />
   </ItemGroup>
@@ -159,6 +160,7 @@
     <ClCompile Include="if_else_endif.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="commandlets.cpp" />
+    <ClCompile Include="process.cpp" />
     <ClCompile Include="repl.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

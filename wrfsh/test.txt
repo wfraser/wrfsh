@@ -1,3 +1,7 @@
+echo `dir ..` $? success
+
+echo $@ $*
+
 if t1 == t1 && f != f || t2 == t2
 else if ( t1 == t1 && f != f ) || t2 == t2 && ( t3 == t3 )
 endif

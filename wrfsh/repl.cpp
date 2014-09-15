@@ -7,144 +7,16 @@
 #include <memory>
 #include <algorithm>
 #include <functional>
+#include <sstream>
 
 #include "common.h"
 #include "global_state.h"
 #include "commandlets.h"
+#include "process.h"
 
 using namespace std;
 
-string process_expression(const string& expression, global_state& global_state)
-{
-    string result;
-
-    bool variable_pending = false;
-    size_t var_substitution_start_pos = 0;
-    bool backtick_pending = false;
-    size_t bt_substitution_start_pos = 0;
-    bool in_string = false;
-    bool in_string_singlequote = false;
-    bool escape = false;
-    for (size_t i = 0, n = expression.size(); i <= n; i++)
-    {
-        const char c = expression[i];
-
-        if (variable_pending)
-        {
-            string::size_type len = result.size() - var_substitution_start_pos;
-
-            static const string allowed_variable_special_characters = "#*@!_?$";
-            // $# = number of positional parameters
-            // $* = positional parameters strung together as a single word
-            // $@ = positional parameters *as separate words* (doesn't work yet)
-            // $! = PID of last job run in background (doesn't work yet)
-            // $_ = last positional parameter of previous command (doesn't work yet)
-            // $? = exit status of previous command
-            // $$ = current PID (doesn't work yet)
-
-            if (i == n
-                || (
-                    len > 1
-                    && !isalnum(c, locale::classic())
-                    && allowed_variable_special_characters.find(c) == string::npos))
-            {
-                // A variable was ended.
-                string varname = result.substr(var_substitution_start_pos + 1, len - 1);
-                string value = global_state.lookup_var(varname);
-                result.replace(var_substitution_start_pos, len, value);
-                variable_pending = false;
-            }
-
-            if (i == n)
-            {
-                break;
-            }
-        }
-
-        if (escape)
-        {
-            goto normal;
-        }
-
-        switch (c)
-        {
-        case '"':
-            if (!in_string)
-            {
-                in_string = true;
-            }
-            else if (!in_string_singlequote)
-            {
-                in_string = false;
-            }
-            else
-            {
-                goto normal;
-            }
-            break;
-
-        case '\'':
-            if (!in_string)
-            {
-                in_string = true;
-                in_string_singlequote = true;
-            }
-            else if (in_string_singlequote)
-            {
-                in_string = false;
-                in_string_singlequote = false;
-            }
-            else
-
-            {
-                goto normal;
-            }
-            break;
-
-        case '`':
-            if (!in_string_singlequote)
-            {
-                if (backtick_pending)
-                {
-                    backtick_pending = false;
-                    string command_line = result.substr(bt_substitution_start_pos);
-                    // TODO: run command, substitute output
-                    string output = "command output";
-                    result.replace(bt_substitution_start_pos, result.size(), output);
-                }
-                else
-                {
-                    backtick_pending = true;
-                    bt_substitution_start_pos = result.size();
-                }
-            }
-            else
-            {
-                goto normal;
-            }
-
-        case '$':
-            if (!in_string_singlequote && !variable_pending)
-            {
-                variable_pending = true;
-                var_substitution_start_pos = result.size();
-            }
-            goto normal;
-
-        case '\\':
-            escape = true;
-            break;
-
-        normal:
-        default:
-            result.push_back(c);
-            escape = false;
-            break;
-        }
-    }
-
-    return result;
-}
+string process_expression(const string& expression, global_state& global_state, istream& in, ostream& err);
 
 struct program_line
 {
@@ -198,7 +70,7 @@ struct program_line
             // Do string interpolation, backtick expansion, etc.
             for (const auto& arg : args)
             {
-                new_args.push_back(process_expression(arg, global_state));
+                new_args.push_back(process_expression(arg, global_state, in, err));
             }
             args_processed = true;
             swap(args, new_args);
@@ -213,9 +85,16 @@ struct program_line
         }
         else
         {
-            // Not a commandlet.
-            //TODO run the command
-            retval = 99;
+            // Not a commandlet. Run the command.
+
+            Process p(command, args);
+            bool ok = p.Run(in, out, err, &retval);
+
+            if (!ok)
+            {
+                err << "process failed!\n";
+                retval = -1;
+            }
         }
 
         if (args_processed)
@@ -227,6 +106,162 @@ struct program_line
     }
 };
 
+string process_expression(const string& expression, global_state& global_state, istream& in, ostream& err)
+{
+    string result;
+
+    bool variable_pending = false;
+    size_t var_substitution_start_pos = 0;
+    size_t bt_substitution_start_pos = 0;
+    vector<char> string_stack;
+    bool escape = false;
+    for (size_t i = 0, n = expression.size(); i <= n; i++)
+    {
+        const char c = expression[i];
+
+        if (variable_pending)
+        {
+            string::size_type len = result.size() - var_substitution_start_pos;
+
+            static const string allowed_variable_special_characters = "#*@!_?$";
+            // $# = number of positional parameters
+            // $* = positional parameters strung together as a single word
+            // $@ = positional parameters *as separate words* (doesn't work yet)
+            // $! = PID of last job run in background (doesn't work yet)
+            // $_ = last positional parameter of previous command (doesn't work yet)
+            // $? = exit status of previous command
+            // $$ = current PID (doesn't work yet)
+
+            if (i == n
+                || (
+                    len > 1
+                    && !isalnum(c, locale::classic())
+                    && allowed_variable_special_characters.find(c) == string::npos))
+            {
+                // A variable was ended.
+                string varname = result.substr(var_substitution_start_pos + 1, len - 1);
+                string value = global_state.lookup_var(varname);
+                result.replace(var_substitution_start_pos, len, value);
+                variable_pending = false;
+            }
+        }
+
+        if (i == n)
+        {
+            break;
+        }
+
+        if (escape)
+        {
+            goto normal;
+        }
+
+        switch (c)
+        {
+        case '"':
+            if (!string_stack.empty() && string_stack.back() == c)
+            {
+                string_stack.pop_back();
+            }
+            else if (string_stack.empty() || string_stack.back() != '\'')
+            {
+                string_stack.push_back(c);
+            }
+            break;
+
+        case '\'':
+            if (string_stack.empty())
+            {
+                string_stack.push_back('\'');
+            }
+            else if (string_stack.back() == '\'')
+            {
+                string_stack.pop_back();
+            }
+            else
+            {
+                goto normal;
+            }
+            break;
+
+        case '`':
+            if (!string_stack.empty() && string_stack.back() == '`')
+            {
+                string command_line = result.substr(bt_substitution_start_pos);
+
+                command_line = process_expression(command_line, global_state, in, err);
+
+                auto pos = command_line.find_first_of(' ');
+                string command = command_line.substr(0, pos);
+                vector<string> args = { "" };
+                for (size_t i = pos + 1, n = command_line.size() - 1; i < n; i++)
+                {
+                    char c = command_line[i];
+                    if (i == ' ')
+                    {
+                        args.emplace_back("");
+                    }
+                    else
+                    {
+                        args.back().push_back(c);
+                    }
+                }
+
+                // TODO: run command, substitute output
+
+                stringstream output;
+                
+                // Commandlets are not supported inside backticks.
+                Process p(command, args);
+                int exitCode;
+                p.Run(in, output, err, &exitCode);
+                global_state.let("?", to_string(exitCode));
+
+                // If commandlets are to be supported inside backticks, use this block instead (and remove the process_expression above):
+                /*
+                program_line cmd;
+                cmd.command = command;
+                cmd.args = args;
+                int exitCode = cmd.execute(in, output, err, global_state);
+                */
+
+                result.replace(bt_substitution_start_pos, result.size(), output.str());
+                string_stack.pop_back();
+            }
+            else if (string_stack.empty() || string_stack.back() != '\'')
+            {
+                string_stack.push_back('`');
+                bt_substitution_start_pos = result.size();
+            }
+            else
+            {
+                goto normal;
+            }
+            break;
+
+        case '$':
+            if ((string_stack.empty() || string_stack.back() == '\'') && !variable_pending)
+            {
+                variable_pending = true;
+                var_substitution_start_pos = result.size();
+            }
+            goto normal;
+
+        case '\\':
+            escape = true;
+            break;
+
+        normal:
+        default:
+            result.push_back(c);
+            escape = false;
+            break;
+        }
+    }
+
+    return result;
+}
+
 int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 {
     int exitCode = 0;
@@ -234,8 +269,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 
     bool escape = false;
 
-    bool in_string = false;
-    bool in_string_singlequote = false;
+    vector<char> string_stack;
 
     bool in_comment = false;
 
@@ -281,7 +315,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
             if (escape)
             {
                 // special case: newline doesn't go to the argument unless it's inside a string
-                if (c == '\n' && !in_string)
+                if (c == '\n' && string_stack.empty())
                 {
                     c = ' ';
                     escape = false;
@@ -345,12 +379,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 {
                     command.print(out); //DEBUG
 
-                    int retval = command.execute(in, out, err, global_state);
+                    int retval = command.execute(cin, out, err, global_state);
 
                     // Save the return value as $?
-                    char buf[10];
-                    snprintf(buf, 10, "%d", retval);
-                    global_state.let("?", buf);
+                    global_state.let("?", to_string(retval));
 
                     command.reset();
                     state = readstate::reading_command;
@@ -364,7 +396,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 
             case ' ':
             case '\t':
-                if (!in_string)
+                if (string_stack.empty())
                 {
                     if (state == readstate::reading_command && !command.command.empty())
                     {
@@ -386,38 +418,30 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 break;
 
             case '\'':
-                if (in_string)
+                if (string_stack.empty())
                 {
-                    if (in_string_singlequote)
-                    {
-                        in_string = false;
-                        in_string_singlequote = false;
-                    }
+                    string_stack.push_back('\'');
                 }
-                else
+                else if (string_stack.back() == '\'')
                 {
-                    in_string = true;
-                    in_string_singlequote = true;
+                    string_stack.pop_back();
                 }
                 goto normal;
 
-            case '"':
-                if (in_string)
-                {
-                    if (!in_string_singlequote)
-                    {
-                        in_string = false;
-                    }
-                }
-                else
-                {
-                    in_string = true;
-                }
-                goto normal;
+#define STRING_CASE(c) \
+            case c: \
+                if (!string_stack.empty() && string_stack.back() == c) \
+                { \
+                    string_stack.pop_back(); \
+                } \
+                else if (string_stack.empty() || string_stack.back() != '\'' ) \
+                { \
+                    string_stack.push_back(c); \
+                } \
+                goto normal \
 
-            case '`':
-                //TODO
-                goto normal;
+            STRING_CASE('"');
+            STRING_CASE('`');
 
             case '0':
             case '1':
