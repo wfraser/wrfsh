@@ -161,6 +161,8 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="commandlets.cpp" />
     <ClCompile Include="process.cpp" />
+    <ClCompile Include="process_posix.cpp" />
+    <ClCompile Include="process_win32.cpp" />
     <ClCompile Include="repl.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
