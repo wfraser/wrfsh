@@ -13,10 +13,9 @@
 #include "global_state.h"
 #include "commandlets.h"
 #include "process.h"
+#include "repl.h"
 
 using namespace std;
-
-string process_expression(const string& expression, global_state& global_state, istream& in, ostream& err);
 
 struct program_line
 {
@@ -95,6 +94,9 @@ struct program_line
                 err << "process failed!\n";
                 retval = -1;
             }
+
+            // Save the return value as $?
+            global_state.let("?", to_string(retval));
         }
 
         if (args_processed)
@@ -133,10 +135,8 @@ string process_expression(const string& expression, global_state& global_state, 
             // $$ = current PID (doesn't work yet)
 
             if (i == n
-                || (
-                    len > 1
-                    && !isalnum(c, locale::classic())
-                    && allowed_variable_special_characters.find(c) == string::npos))
+                || (!isalnum(c, locale::classic())
+                    && (len > 1 || allowed_variable_special_characters.find(c) == string::npos)))
             {
                 // A variable was ended.
                 string varname = result.substr(var_substitution_start_pos + 1, len - 1);
@@ -207,15 +207,14 @@ string process_expression(const string& expression, global_state& global_state, 
                     }
                 }
 
-                // TODO: run command, substitute output
-
                 stringstream output;
-                
+
                 // Commandlets are not supported inside backticks.
                 Process p(command, args);
                 int exitCode;
+
+                // (Don't check for error condition)
                 p.Run(in, output, err, &exitCode);
-                global_state.let("?", to_string(exitCode));
 
                 // If commandlets are to be supported inside backticks, use this block instead (and remove the process_expression above):
                 /*
@@ -224,6 +223,8 @@ string process_expression(const string& expression, global_state& global_state, 
                 cmd.args = args;
                 int exitCode = cmd.execute(in, output, err, global_state);
                 */
+
+                global_state.let("?", to_string(exitCode));
 
                 result.replace(bt_substitution_start_pos, result.size(), output.str());
                 string_stack.pop_back();
@@ -240,7 +241,7 @@ string process_expression(const string& expression, global_state& global_state, 
             break;
 
         case '$':
-            if ((string_stack.empty() || string_stack.back() == '\'') && !variable_pending)
+            if ((string_stack.empty() || string_stack.back() != '\'') && !variable_pending)
             {
                 variable_pending = true;
                 var_substitution_start_pos = result.size();
@@ -377,12 +378,9 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 }
                 else if (!command.command.empty())
                 {
-                    command.print(out); //DEBUG
+                    //command.print(out); //DEBUG
 
-                    int retval = command.execute(cin, out, err, global_state);
-
-                    // Save the return value as $?
-                    global_state.let("?", to_string(retval));
+                    command.execute(cin, out, err, global_state);
 
                     command.reset();
                     state = readstate::reading_command;

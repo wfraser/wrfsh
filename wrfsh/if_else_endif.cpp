@@ -6,10 +6,12 @@
 #include <memory>
 #include <algorithm>
 #include <functional>
+#include <regex>
 
 #include "common.h"
 #include "global_state.h"
 #include "commandlets.h"
+#include "repl.h"
 
 using namespace std;
 
@@ -39,9 +41,107 @@ namespace IfExpression
 
         Expression() : type(Type::Empty)
         {}
+
+        bool Evaluate(istream& in, ostream& out, ostream& err, global_state& state)
+        {
+            if (type == Type::CompoundExpression)
+            {
+                bool left = compound_expression->expr1->Evaluate(in, out, err, state);
+                if (state.error)
+                {
+                    return false;
+                }
+
+                if (compound_expression->op == "")
+                {
+                    return left;
+                }
+                else if ((compound_expression->op == "&&" && left) || (compound_expression->op == "||" && !left))
+                {
+                    bool right = compound_expression->expr2->Evaluate(in, out, err, state);
+                    if (state.error)
+                    {
+                        return false;
+                    }
+
+                    return right;
+                }
+                else
+                {
+                    return left;
+                }
+            }
+            else if (type == Type::Comparison)
+            {
+                string& op = comparison->op;
+
+                string left = process_expression(comparison->expression1, state, in, err);
+                if (state.error)
+                {
+                    return false;
+                }
+
+                if (op.empty())
+                {
+                    return atoi(left.c_str()) != 0;
+                }
+
+                string right = process_expression(comparison->expression2, state, in, err);
+                if (state.error)
+                {
+                    return false;
+                }
+
+                if (op == "==")
+                {
+                    return left == right;
+                }
+                else if (op == "!=")
+                {
+                    return left != right;
+                }
+                else if (op == "<")
+                {
+                    return atoi(left.c_str()) < atoi(right.c_str());
+                }
+                else if (op == "<=")
+                {
+                    return atoi(left.c_str()) <= atoi(right.c_str());
+                }
+                else if (op == ">")
+                {
+                    return atoi(left.c_str()) > atoi(right.c_str());
+                }
+                else if (op == ">=")
+                {
+                    return atoi(left.c_str()) >= atoi(right.c_str());
+                }
+                else if (op == "~")
+                {
+                    regex r(right);
+                    return regex_match(left, r);
+                }
+                else if (op == "!~")
+                {
+                    regex r(right);
+                    return !regex_match(left, r);
+                }
+                else
+                {
+                    err << "invalid operand in if statement: \"" << op << "\"\n";
+                    state.error = true;
+                    return false;
+                }
+            }
+            else
+            {
+                err << "expression type cannot be empty! this is a bug.\n";
+                state.error = true;
+                return false;
+            }
+        }
     };
 
-    
     void PrintAST(ostream& out, Expression& exp, int nesting_level)
     {
         out << string(nesting_level * 4, ' ')
@@ -253,7 +353,7 @@ namespace IfExpression
     }
 }
 
-int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& global_state, vector<string>& args)
+int if_commandlet(istream& in, ostream& out, ostream& err, global_state& global_state, vector<string>& args)
 {
     IfExpression::Expression root_expression;
 
@@ -266,12 +366,15 @@ int if_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& glo
     }
 
     //DEBUG print AST
-    IfExpression::PrintAST(out, root_expression, 0);
+    //IfExpression::PrintAST(out, root_expression, 0);
 
-    //TODO: evaluate the AST we just built
-    bool if_result = false;
+    bool if_result = root_expression.Evaluate(in, out, err, global_state);
+    if (global_state.error)
+    {
+        return -1;
+    }
 
-    global_state.if_state.push_back({ if_result });
+    global_state.if_state.push_back({ if_result, if_result });
 
     return 0;
 }
@@ -289,13 +392,18 @@ int else_commandlet(istream& in, ostream& out, ostream& err, global_state& state
     {
         if (args[0] == "if")
         {
-            if (!state.if_state.back().active)
+            if (!state.if_state.back().active && !state.if_state.back().chain_matched)
             {
                 vector<string> args2(args.begin() + 1, args.end());
                 if_commandlet(in, out, err, state, args2);
                 bool condition = state.if_state.back().active;
                 state.if_state.pop_back();
                 state.if_state.back().active = condition;
+                state.if_state.back().chain_matched = condition;
+            }
+            else
+            {
+                state.if_state.back().active = false;
             }
         }
         else
@@ -307,7 +415,14 @@ int else_commandlet(istream& in, ostream& out, ostream& err, global_state& state
     }
     else
     {
-        state.if_state.back().active ^= true;
+        if (!state.if_state.back().chain_matched)
+        {
+            state.if_state.back().active = true;
+        }
+        else
+        {
+            state.if_state.back().active = false;
+        }
     }
 
     return 0;

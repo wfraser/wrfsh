@@ -57,8 +57,17 @@ HANDLE RunCommandWin32(
     if (!result)
     {
         HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
-        _com_error err(hr);
-        err_stream << "CreateProcessW failed: " << Narrow(err.ErrorMessage()) << endl;
+        if (hr == HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE))
+        {
+            wstring cmd(cmdline);
+            cmd = cmd.substr(0, cmd.find(' '));
+            err_stream << "Error: command not found: " << Narrow(cmd) << endl;
+        }
+        else
+        {
+            _com_error err(hr);
+            err_stream << "CreateProcessW failed: " << Narrow(err.ErrorMessage()) << endl;
+        }
         return INVALID_HANDLE_VALUE;
     }
 
@@ -124,6 +133,54 @@ DWORD WINAPI WriteThreadProc(LPVOID lpThreadParam)
     return 0;
 }
 
+class ManagedHandle
+{
+public:
+    ManagedHandle() : m_handle(INVALID_HANDLE_VALUE), m_closed(false)
+    {
+    }
+
+    ManagedHandle(HANDLE h) : m_handle(h), m_closed(false)
+    {
+    }
+
+    void Close()
+    {
+        if (!m_closed && m_handle != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(m_handle);
+            m_closed = true;
+        }
+    }
+
+    ManagedHandle& operator=(HANDLE h)
+    {
+        Close();
+        m_handle = h;
+        m_closed = false;
+        return *this;
+    }
+
+    ~ManagedHandle()
+    {
+        Close();
+    }
+
+    operator HANDLE()
+    {
+        return m_handle;
+    }
+
+    HANDLE* operator&()
+    {
+        return &m_handle;
+    }
+
+private:
+    HANDLE m_handle;
+    bool   m_closed;
+};
+
 #endif
 
 Process::Process(const string program, const vector<string> args) :
@@ -146,16 +203,18 @@ bool Process::Run(istream& in, ostream& out, ostream& err, int *pExitCode)
 {
 #ifdef _MSC_VER
 
+    *pExitCode = -1;
+
     bool needs_io_thread = false;
-    HANDLE hIn, hOut, hErr;
-    HANDLE hThreadIn, hThreadOut, hThreadErr;
+    ManagedHandle hIn, hOut, hErr;
+    ManagedHandle hThreadIn, hThreadOut, hThreadErr;
 
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength = sizeof(SECURITY_ATTRIBUTES);
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    auto fn = [&needs_io_thread, &sa](HANDLE& childHandle, HANDLE& threadHandle, HANDLE& readHandle, HANDLE& writeHandle, ios& stream, ios& stdStream, DWORD handleName)
+    auto fn = [&needs_io_thread, &sa](ManagedHandle& childHandle, ManagedHandle& threadHandle, ManagedHandle& readHandle, ManagedHandle& writeHandle, ios& stream, ios& stdStream, DWORD handleName)
     {
         if (&stream == &stdStream, false)
         {
@@ -183,16 +242,17 @@ bool Process::Run(istream& in, ostream& out, ostream& err, int *pExitCode)
         wargs.append(Widen(*it));
     }
 
-    HANDLE hProcess = RunCommandWin32(L"", wargs.c_str(), hIn, hOut, hErr, err);
-    if (hProcess == INVALID_HANDLE_VALUE)
-    {
-        //TODO error
-    }
+    ManagedHandle hProcess = RunCommandWin32(L"", wargs.c_str(), hIn, hOut, hErr, err);
 
     // Close the child's end of the pipes. It inherited its own handles for them.
-    CloseHandle(hIn);
-    CloseHandle(hOut);
-    CloseHandle(hErr);
+    hIn.Close();
+    hOut.Close();
+    hErr.Close();
+
+    if (hProcess == INVALID_HANDLE_VALUE)
+    {
+        return false;
+    }
 
     if (needs_io_thread)
     {
@@ -200,38 +260,34 @@ bool Process::Run(istream& in, ostream& out, ostream& err, int *pExitCode)
             outArgs = { hThreadOut, &out },
             errArgs = { hThreadErr, &err };
 
-        HANDLE threads[] = {
-            // TODO FIXME:
-            // The stdin write thread is problematic because it uses blocking calls.
-            // Once it blocks, it won't exit.
-            //CreateThread(nullptr, 0, WriteThreadProc, &inArgs, 0, nullptr),
-            CreateThread(nullptr, 0, ReadThreadProc, &outArgs, 0, nullptr),
-            CreateThread(nullptr, 0, ReadThreadProc, &errArgs, 0, nullptr)
-        };
+        // TODO FIXME:
+        // The stdin write thread is problematic because it uses blocking calls.
+        // Once it blocks, it won't exit.
+        //ManagedHandle hInThread = CreateThread(nullptr, 0, WriteThreadProc, &inArgs, 0, nullptr);
+        ManagedHandle hOutThread = CreateThread(nullptr, 0, ReadThreadProc, &outArgs, 0, nullptr);
+        ManagedHandle hErrThread = CreateThread(nullptr, 0, ReadThreadProc, &errArgs, 0, nullptr);
 
         if (WAIT_OBJECT_0 != WaitForSingleObject(hProcess, INFINITE))
         {
-            //TODO error
+            _com_error error(HRESULT_FROM_WIN32(GetLastError()));
+            err << "failed to wait on child process: " << Narrow(error.ErrorMessage()) << endl;
+            return false;
         }
+
+        HANDLE threads[] = { /*hInThread,*/ hOutThread, hErrThread };
 
         if (WAIT_OBJECT_0 != WaitForMultipleObjects(ARRAYSIZE(threads), threads, /*waitall:*/ true, INFINITE))
         {
-            //TODO error
+            _com_error error(HRESULT_FROM_WIN32(GetLastError()));
+            err << "failed to wait on I/O threads: " << Narrow(error.ErrorMessage()) << endl;
+            return false;
         }
-
-        CloseHandle(hThreadIn);
-        CloseHandle(hThreadOut);
-        CloseHandle(hThreadErr);
-
-        for (HANDLE thread : threads)
-            CloseHandle(thread);
     }
 
     DWORD exitCode;
     GetExitCodeProcess(hProcess, &exitCode);
     *pExitCode = (int)exitCode;
 
-    CloseHandle(hProcess);
     return true;
 
 #else

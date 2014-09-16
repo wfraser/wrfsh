@@ -31,6 +31,7 @@ public:
     struct if_state_vars
     {
         bool active;
+        bool chain_matched; // for a chain of if-elseif-elseif-else, has any 'if' evaluated to true?
     };
     std::vector<if_state_vars> if_state;
 
