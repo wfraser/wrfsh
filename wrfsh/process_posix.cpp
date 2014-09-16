@@ -6,6 +6,7 @@
 
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #include "process.h"
 
