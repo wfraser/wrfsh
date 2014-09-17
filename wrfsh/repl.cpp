@@ -380,7 +380,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 {
                     //command.print(out); //DEBUG
 
-                    command.execute(in, out, err, global_state);
+                    exitCode = command.execute(in, out, err, global_state);
 
                     if (global_state.exit)
                     {
