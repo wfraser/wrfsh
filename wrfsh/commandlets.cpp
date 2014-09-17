@@ -13,16 +13,33 @@
 
 using namespace std;
 
-int let_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_state& state, vector<string>& args)
+int let_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& state, vector<string>& args)
 {
-    if (args.size() != 3 || args[1] != "=")
+    if (args.size() == 0)
+    {
+        for (const auto& pair : state.environment)
+        {
+            if (state.local_vars.find(pair.first) == state.local_vars.end())
+            {
+                out << pair.first << "=" << pair.second << endl;
+            }
+        }
+        for (const auto& pair : state.local_vars)
+        {
+            out << pair.first << "=" << pair.second << endl;
+        }
+    }
+    else if (args.size() != 3 || args[1] != "=")
     {
         err << "Syntax error: 'let' expects to be used like: 'let {variable} = {value}'\n";
         state.error = true;
         return -1;
     }
+    else
+    {
+        state.let(args[0], args[2]);
+    }
 
-    state.let(args[0], args[2]);
     return 0;
 }
 

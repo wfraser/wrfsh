@@ -1,15 +1,20 @@
-let ret = 9999
-exit $ret
+echo `dir ..` $? success
+
+echo $@ $*
 
 if t1 == t1 && f != f || t2 == t2
+echo yep
 else if ( t1 == t1 && f != f ) || t2 == t2 && ( t3 == t3 )
+echo nope
+else
+echo nope2
 endif
 
 let foo = Hello
 let bar = world
 
 if $foo == $bar || `hello` == ""
-echo
+echo correct
 endif
 
 10 echo "$foo $bar"
@@ -29,3 +34,6 @@ endif
 
 echo wrfsh says: "$foo, $bar!"
 # This has been a test of the wrfsh shell. This is only a test.
+
+let ret = 9999
+exit $ret
