@@ -11,20 +11,18 @@ using namespace std;
 global_state::global_state(int argc, const char * const argv [], const char * const env []) :
     interactive(false),
     error(false),
+    exit(false),
     environment({}),
     local_vars({}),
     stored_program({}),
     if_state({})
 {
-    char buf[10];
     for (int i = 0; i < argc; i++)
     {
-        snprintf(buf, 10, "%d", i);
-        let(buf, argv[i]);
+        let(to_string(i), argv[i]);
     }
-
-    snprintf(buf, 10, "%d", argc);
-    let("#", buf);
+    
+    let("#", to_string(argc));
 
     let("?", "0");
 

@@ -5,6 +5,7 @@ class global_state
 public:
     bool interactive;
     bool error;
+    bool exit;
     std::unordered_map<std::string, std::string> environment;
     std::unordered_map<std::string, std::string> local_vars;
 

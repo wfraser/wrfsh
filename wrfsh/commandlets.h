@@ -10,6 +10,7 @@ COMMANDLET(list);
 COMMANDLET(if);
 COMMANDLET(else);
 COMMANDLET(endif);
+COMMANDLET(exit);
 
 #undef COMMANDLET
 

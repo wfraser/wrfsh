@@ -329,6 +329,19 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                     command.print(out); //DEBUG
 
                     int retval = command.execute(in, out, err, global_state);
+                    
+                    if (global_state.exit)
+                    {
+                        if (!global_state.error)
+                        {
+                            // Exit here.
+                            break;
+                        }
+                        else
+                        {
+                            global_state.exit = false;
+                        }
+                    }
 
                     // Save the return value as $?
                     char buf[10];
@@ -455,9 +468,9 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 global_state.error = false;
             }
 
-            if (in.eof())
+            if (in.eof() || global_state.exit)
             {
-                // EOF was hit this iteration, and handled above. Terminate the REPL now.
+                // EOF or exit was hit this iteration, and handled above. Terminate the REPL now.
                 break;
             }
         }
