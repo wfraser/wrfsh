@@ -194,16 +194,16 @@ string process_expression(const string& expression, global_state& global_state, 
                 auto pos = command_line.find_first_of(' ');
                 string command = command_line.substr(0, pos);
                 vector<string> args = { "" };
-                for (size_t i = pos + 1, n = command_line.size() - 1; i < n; i++)
+                for (size_t cmd_i = pos + 1, cmd_n = command_line.size() - 1; cmd_i < cmd_n; cmd_i++)
                 {
-                    char c = command_line[i];
-                    if (i == ' ')
+                    char cmd_c = command_line[cmd_i];
+                    if (cmd_i == ' ')
                     {
                         args.emplace_back("");
                     }
                     else
                     {
-                        args.back().push_back(c);
+                        args.back().push_back(cmd_c);
                     }
                 }
 

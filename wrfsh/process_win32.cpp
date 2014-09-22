@@ -111,8 +111,8 @@ HANDLE RunCommandWin32(
         }
         else
         {
-            _com_error err(hr);
-            err_stream << "CreateProcessW failed: " << Narrow(err.ErrorMessage()) << endl;
+            _com_error error(hr);
+            err_stream << "CreateProcessW failed: " << Narrow(error.ErrorMessage()) << endl;
         }
         return INVALID_HANDLE_VALUE;
     }
