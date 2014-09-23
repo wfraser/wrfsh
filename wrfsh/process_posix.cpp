@@ -1,5 +1,7 @@
 #ifndef _MSC_VER
 
+#include "unicodehack.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -7,7 +9,9 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <assert.h>
 
+#include "stream_ex.h"
 #include "process.h"
 
 using namespace std;
@@ -82,18 +86,34 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
         ios& stdStream,
         int stdFd)
     {
-        if (&stream == &stdStream)
+        auto str_ex = dynamic_cast<stream_ex*>(&stream);
+        if ((str_ex == nullptr) ? (&stream == &stdStream)
+                                : (*str_ex == stdStream))
         {
+            // It's a standard stream, or a stream_ex wrapping a standard stream.
             childFd = stdFd;
+            childFd.LeaveOpen();
             threadFd = -1;
         }
         else
         {
-            needs_io_thread = true;
-            int fd[2];
-            pipe(fd);
-            writeFd = fd[0];
-            readFd = fd[1];
+            if (str_ex != nullptr)
+            {
+                // It's a stream_ex wrapping some file handle.
+                childFd = str_ex->get_native_handle();
+                childFd.LeaveOpen();
+                threadFd = -1;
+                assert(childFd != -1);
+            }
+            else
+            {
+                // It's some other kind of stream.
+                needs_io_thread = true;
+                int fd[2];
+                pipe(fd);
+                writeFd = fd[0];
+                readFd = fd[1];
+            }
         }
     };
 
