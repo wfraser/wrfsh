@@ -2,12 +2,16 @@
 #include <iostream>
 #include <fstream>
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#include <io.h>
-
 #include <assert.h>
+
+#ifdef _MSC_VER
+#include <io.h>
+#else
+#include <fcntl.h>
+    #ifdef __GNUC__
+    #include <ext/stdio_filebuf.h>
+    #endif
+#endif
 
 #include "common.h"
 #include "stream_ex.h"
@@ -30,7 +34,11 @@ stream_ex::stream_ex(native_handle handle, std::ios_base::openmode mode)
 stream_ex::stream_ex(path_t path, std::ios_base::openmode mode)
     : m_kind(kind::Native)
     , m_stream(nullptr)
+#ifdef _MSC_VER
     , m_handle(INVALID_HANDLE_VALUE)
+#else
+    , m_handle(-1)
+#endif
 {
 #ifdef _MSC_VER
     DWORD access = 0;
@@ -120,8 +128,8 @@ void stream_ex::open_native_handle(std::ios_base::openmode mode)
 #else
 #ifdef __GNUC__
     // UNTESTED!
-    __gnu_cxx::stdio_filebuf<char> filebuf(handle, mode);
-    m_stream = new std::iostream(filebuf);
+    m_filebuf = new __gnu_cxx::stdio_filebuf<char>(m_handle, mode);
+    m_stream = new std::iostream(m_filebuf);
 #else
 #error no stream_ex support for your compiler :(
 #endif
@@ -133,7 +141,14 @@ stream_ex::~stream_ex()
     if (m_kind == kind::Native)
     {
         delete m_stream;
-    }
+
+#ifdef __GNUC__
+        if (m_filebuf != nullptr)
+        {
+            delete m_filebuf;
+        }
+#endif
+   }
 }
 
 bool stream_ex::operator==(const std::ios & stream)

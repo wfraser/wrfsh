@@ -34,6 +34,10 @@ protected:
     std::ios* m_stream;
     native_handle m_handle;
 
+#ifdef __GNUC__
+    std::basic_filebuf<char>* m_filebuf;
+#endif
+
 private:
     void open_native_handle(std::ios_base::openmode mode);
 };
