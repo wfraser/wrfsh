@@ -5,10 +5,12 @@
 #include <fstream>
 #include <unordered_map>
 #include <list>
+#include <memory>
 
 #include "common.h"
 #include "global_state.h"
 #include "repl.h"
+#include "stream_ex.h"
 
 using namespace std;
 
@@ -19,15 +21,20 @@ int real_main(int argc, char *argv[], char *envp[])
     {
         global_state gs(argc, argv, envp);
 
+        unique_ptr<istream_ex> in;
+        ostream_ex out(&cout);
+        ostream_ex err(&cerr);
+
         if (argc == 2)
         {
-            ifstream in(ospath(argv[1]), ios::in);
-            exitCode = repl(in, cout, cerr, gs);
+            in = make_unique<istream_ex>(ospath(argv[1]));
         }
         else
         {
-            exitCode = repl(cin, cout, cerr, gs);
+            in = make_unique<istream_ex>(&cin);
         }
+
+        exitCode = repl(*in.get(), out, err, gs);
     }
     catch (...)
     {

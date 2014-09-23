@@ -1,6 +1,11 @@
 #pragma once
 
 #ifdef _MSC_VER
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+
 #define snprintf(buf, n, format, ...)  _snprintf_s(buf, n, n, format, __VA_ARGS__)
 #endif
 

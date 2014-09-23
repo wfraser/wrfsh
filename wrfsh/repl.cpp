@@ -329,6 +329,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
 
             switch (c)
             {
+            case '\r':
+                // Ignore.
+                break;
+
             case '\n':
                 if (!command.command.empty() && (command.args.size() > 0) && command.args.back().empty())
                 {

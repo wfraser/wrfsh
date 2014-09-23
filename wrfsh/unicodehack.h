@@ -14,6 +14,8 @@ namespace std
     typedef basic_string<wchar_t, char_traits<wchar_t>, allocator<wchar_t>> wstring;
 }
 
+struct _iobuf;
+
 namespace std
 {
     // Define a new basic_[io]fstream with the char* and string constructors deleted.
@@ -60,6 +62,11 @@ namespace std
             const wstring filename_utf16, \
             int mode = openMode \
             ) : T(filename_utf16, mode) \
+        {} \
+        \
+        explicit basic_##className##_unicodehack( \
+            _iobuf* file \
+            ) : T(file) \
         {} \
         \
         void open( \

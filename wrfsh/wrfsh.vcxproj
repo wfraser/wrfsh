@@ -153,6 +153,7 @@
     <ClInclude Include="commandlets.h" />
     <ClInclude Include="process.h" />
     <ClInclude Include="repl.h" />
+    <ClInclude Include="stream_ex.h" />
     <ClInclude Include="unicodehack.h" />
   </ItemGroup>
   <ItemGroup>
@@ -164,6 +165,7 @@
     <ClCompile Include="process_posix.cpp" />
     <ClCompile Include="process_win32.cpp" />
     <ClCompile Include="repl.cpp" />
+    <ClCompile Include="stream_ex.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
