@@ -87,7 +87,7 @@ struct program_line
             // Not a commandlet. Run the command.
 
             Process p(command, args);
-            bool ok = p.Run(in, out, err, &retval);
+            bool ok = p.Run(cin, out, err, &retval);
 
             if (!ok)
             {
@@ -214,7 +214,7 @@ string process_expression(const string& expression, global_state& global_state, 
                 int exitCode;
 
                 // (Don't check for error condition)
-                p.Run(in, output, err, &exitCode);
+                p.Run(cin, output, err, &exitCode);
 
                 // If commandlets are to be supported inside backticks, use this block instead (and remove the process_expression above):
                 /*

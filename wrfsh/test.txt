@@ -1,3 +1,5 @@
+dir .
+
 echo `dir ..` $? success
 
 echo $@ $*
@@ -34,6 +36,3 @@ endif
 
 echo wrfsh says: "$foo, $bar!"
 # This has been a test of the wrfsh shell. This is only a test.
-
-let ret = 9999
-exit $ret

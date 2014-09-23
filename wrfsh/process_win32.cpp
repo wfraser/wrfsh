@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <sstream>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -12,6 +13,7 @@
 #include <comdef.h>
 #include <io.h>
 
+#include "stream_ex.h"
 #include "process.h"
 
 using namespace std;
@@ -34,6 +36,11 @@ public:
             CloseHandle(m_handle);
             m_closed = true;
         }
+    }
+
+    void LeaveOpen()
+    {
+        m_closed = true;
     }
 
     ManagedHandle& operator=(HANDLE h)
@@ -69,8 +76,7 @@ HANDLE RunCommandWin32(
     const wchar_t* cmdline,
     HANDLE in,
     HANDLE out,
-    HANDLE err,
-    ostream& err_stream
+    HANDLE err
     )
 {
     wstring cmdline_copy(cmdline);
@@ -107,12 +113,12 @@ HANDLE RunCommandWin32(
         {
             wstring cmd(cmdline);
             cmd = cmd.substr(0, cmd.find(' '));
-            err_stream << "Error: command not found: " << Narrow(cmd) << endl;
+            cerr << "Error: command not found: " << Narrow(cmd) << endl;
         }
         else
         {
             _com_error error(hr);
-            err_stream << "CreateProcessW failed: " << Narrow(error.ErrorMessage()) << endl;
+            cerr << "CreateProcessW failed: " << Narrow(error.ErrorMessage()) << endl;
         }
         return INVALID_HANDLE_VALUE;
     }
@@ -122,22 +128,27 @@ HANDLE RunCommandWin32(
 
 struct IOThreadArgs
 {
-    HANDLE childHandle;
-    ios *stream;
-    bool terminate;
+    ManagedHandle* childHandle;  // For talking with the child process
+    ios* stream;                // For talking with the outside world
 };
 
 DWORD WINAPI ReadThreadProc(LPVOID lpThreadParam)
 {
     auto args = reinterpret_cast<IOThreadArgs*>(lpThreadParam);
-    auto stream = dynamic_cast<ostream*>(args->stream);
+    auto out = dynamic_cast<ostream*>(args->stream);
+    if (out == nullptr)
+    {
+        assert(false);
+        cerr << "BUG: ReadThreadProc needs to be given an ostream.\n";
+        return 1;
+    }
 
     char readBuf[512];
     SetLastError(0);
     for (;;)
     {
         DWORD bytesRead;
-        BOOL ok = ReadFile(args->childHandle, readBuf, ARRAYSIZE(readBuf), &bytesRead, nullptr);
+        BOOL ok = ReadFile(*(args->childHandle), readBuf, ARRAYSIZE(readBuf), &bytesRead, nullptr);
         if (!ok || bytesRead == 0)
         {
             if (GetLastError() != ERROR_BROKEN_PIPE)
@@ -148,7 +159,7 @@ DWORD WINAPI ReadThreadProc(LPVOID lpThreadParam)
             break;
         }
 
-        stream->write(readBuf, bytesRead);
+        out->write(readBuf, bytesRead);
     }
 
     return 0;
@@ -157,23 +168,54 @@ DWORD WINAPI ReadThreadProc(LPVOID lpThreadParam)
 DWORD WINAPI WriteThreadProc(LPVOID lpThreadParam)
 {
     auto args = reinterpret_cast<IOThreadArgs*>(lpThreadParam);
-    auto stream = dynamic_cast<istream*>(args->stream);
-
-    char writeBuf[512];
-    for (;;)
+    auto sstr = dynamic_cast<stringstream*>(args->stream);
+    if (sstr != nullptr)
     {
-        DWORD bytesRead = 1;
-        stream->read(writeBuf, 1);   // Block until a byte is available.
-        if (stream->gcount() == 0)
-            break;
+        // Special case: input is from a string
 
-        // Try to read some more while we're at it
-        bytesRead += (DWORD)stream->readsome(writeBuf + 1, ARRAYSIZE(writeBuf) - 1);
+        DWORD bytesWritten = 0;
+        for (DWORD i = 0, n = (DWORD)sstr->str().size(); i < n; i += bytesWritten)
+        {
+            BOOL ok = WriteFile(*(args->childHandle), sstr->str().data(), n, &bytesWritten, nullptr);
+            if (!ok)
+            {
+                break;
+            }
+        }
 
-        DWORD bytesWritten;
-        BOOL ok = WriteFile(args->childHandle, writeBuf, bytesRead, &bytesWritten, nullptr);
-        if (!ok || bytesWritten != bytesRead)
-            break;
+        args->childHandle->Close();
+    }
+    else
+    {
+        auto s_ex = dynamic_cast<stream_ex*>(args->stream);
+        if (s_ex == nullptr)
+        {
+            assert(false);
+            cerr << "BUG: WriteThreadProc needs to be given a stringstream or a stream_ex.\n";
+            return 1;
+        }
+
+        char writeBuf[512];
+        for (;;)
+        {
+            DWORD bytesRead = 1;
+
+            // Blocks until a byte is available or is cancelled.
+            DWORD result = ReadFile(s_ex->get_native_handle(), writeBuf, ARRAYSIZE(writeBuf), &bytesRead, nullptr);
+
+            if (result != TRUE)
+            {
+                break;
+            }
+
+            if (bytesRead > 0)
+            {
+                DWORD bytesWritten;
+                BOOL ok = WriteFile(args->childHandle, writeBuf, bytesRead, &bytesWritten, nullptr);
+                if (!ok || bytesWritten != bytesRead)
+                    break;
+            }
+        }
     }
 
     return 0;
@@ -192,26 +234,53 @@ bool Process::Run_Win32(istream& in, ostream& out, ostream& err, int *pExitCode)
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    auto fn = [&needs_io_thread, &sa](ManagedHandle& childHandle, ManagedHandle& threadHandle, ManagedHandle& readHandle, ManagedHandle& writeHandle, ios& stream, ios& stdStream, DWORD handleName)
+    auto fn = [&needs_io_thread, &sa](
+        ManagedHandle& childHandle,
+        ManagedHandle& threadHandle,
+        ManagedHandle& readHandle,
+        ManagedHandle& writeHandle,
+        ios& stream,
+        ios& stdStream,
+        DWORD handleName
+        )
     {
-        if (&stream == &stdStream, false)
+        auto str_ex = dynamic_cast<stream_ex*>(&stream);
+        if ((str_ex == nullptr) ? (&stream == &stdStream)
+                                : (*str_ex == stdStream))
         {
+            // It's a standard stream, or a stream_ex wrapping a standard stream.
             childHandle = GetStdHandle(handleName);
+            childHandle.LeaveOpen();
             threadHandle = INVALID_HANDLE_VALUE;
         }
         else
         {
-            needs_io_thread = true;
-            CreatePipe(&readHandle, &writeHandle, &sa, 0);
-            SetHandleInformation(childHandle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-            SetHandleInformation(threadHandle, HANDLE_FLAG_INHERIT, 0);
+            if (str_ex != nullptr)
+            {
+                // It's a stream_ex wrapping some file handle.
+                childHandle = str_ex->get_native_handle();
+                childHandle.LeaveOpen();
+                threadHandle = INVALID_HANDLE_VALUE;
+                assert(childHandle != INVALID_HANDLE_VALUE);
+            }
+            else
+            {
+                // It's some other kind of iostream.
+                // NOTE: The read thread only supports stringstreams here (or one of the two above)!
+                // For the write thread, it can be any type of iostream.
+
+                needs_io_thread = true;
+                CreatePipe(&readHandle, &writeHandle, &sa, 0);
+                SetHandleInformation(childHandle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+                SetHandleInformation(threadHandle, HANDLE_FLAG_INHERIT, 0);
+            }
         }
     };
 
-    //child  thread      read        write      str  std   handleName
-    fn(hIn,  hThreadIn,  hIn,        hThreadIn, in,  cin,  STD_INPUT_HANDLE);
-    fn(hOut, hThreadOut, hThreadOut, hOut,      out, cout, STD_OUTPUT_HANDLE);
-    fn(hErr, hThreadErr, hThreadErr, hErr,      err, cerr, STD_ERROR_HANDLE);
+    //child  thread      read        write      stream  std   handleName
+    fn(hIn,  hThreadIn,  hIn,        hThreadIn, in,     cin,  STD_INPUT_HANDLE);
+    fn(hOut, hThreadOut, hThreadOut, hOut,      out,    cout, STD_OUTPUT_HANDLE);
+    fn(hErr, hThreadErr, hThreadErr, hErr,      err,    cerr, STD_ERROR_HANDLE);
 
     wstring wargs = Widen(m_program);
     for (auto it = m_args.begin(), end = m_args.end(); it != end; ++it)
@@ -220,44 +289,57 @@ bool Process::Run_Win32(istream& in, ostream& out, ostream& err, int *pExitCode)
         wargs.append(Widen(*it));
     }
 
-    ManagedHandle hProcess = RunCommandWin32(L"", wargs.c_str(), hIn, hOut, hErr, err);
-
-    // Close the child's end of the pipes. It inherited its own handles for them.
-    hIn.Close();
-    hOut.Close();
-    hErr.Close();
+    ManagedHandle hProcess = RunCommandWin32(L"", wargs.c_str(), hIn, hOut, hErr);
 
     if (hProcess == INVALID_HANDLE_VALUE)
     {
         return false;
     }
 
+    // Close the child's end of the pipes. It inherited its own handles for them.
+    hIn.Close();
+    hOut.Close();
+    hErr.Close();
+
     if (needs_io_thread)
     {
-        IOThreadArgs //inArgs = { hThreadIn, &in },
-            outArgs = { hThreadOut, &out },
-            errArgs = { hThreadErr, &err };
+        vector<HANDLE> threads;
+        ManagedHandle hInThread, hOutThread, hErrThread;
 
-        // TODO FIXME:
-        // The stdin write thread is problematic because it uses blocking calls.
-        // Once it blocks, it won't exit.
-        //ManagedHandle hInThread = CreateThread(nullptr, 0, WriteThreadProc, &inArgs, 0, nullptr);
-        ManagedHandle hOutThread = CreateThread(nullptr, 0, ReadThreadProc, &outArgs, 0, nullptr);
-        ManagedHandle hErrThread = CreateThread(nullptr, 0, ReadThreadProc, &errArgs, 0, nullptr);
+        if (hThreadIn != INVALID_HANDLE_VALUE)
+        {
+            IOThreadArgs inArgs = { addressof(hThreadIn), &in };
+            hInThread = CreateThread(nullptr, 0, WriteThreadProc, &inArgs, 0, nullptr);
+            threads.push_back(hInThread);
+        }
+        if (hThreadOut != INVALID_HANDLE_VALUE)
+        {
+            IOThreadArgs outArgs = { addressof(hThreadOut), &out };
+            hOutThread = CreateThread(nullptr, 0, ReadThreadProc, &outArgs, 0, nullptr);
+            threads.push_back(hOutThread);
+        }
+        if (hThreadErr != INVALID_HANDLE_VALUE)
+        {
+            IOThreadArgs errArgs = { addressof(hThreadErr), &err };
+            hErrThread = CreateThread(nullptr, 0, ReadThreadProc, &errArgs, 0, nullptr);
+            threads.push_back(hErrThread);
+        }
 
         if (WAIT_OBJECT_0 != WaitForSingleObject(hProcess, INFINITE))
         {
             _com_error error(HRESULT_FROM_WIN32(GetLastError()));
-            err << "failed to wait on child process: " << Narrow(error.ErrorMessage()) << endl;
+            cerr << "failed to wait on child process: " << Narrow(error.ErrorMessage()) << endl;
             return false;
         }
 
-        HANDLE threads[] = { /*hInThread,*/ hOutThread, hErrThread };
+        // The input thread uses I/O that could block even after the process ends (i.e. waiting on terminal).
+        // Cancel it so the thread can exit.
+        CancelSynchronousIo(hInThread);
 
-        if (WAIT_OBJECT_0 != WaitForMultipleObjects(ARRAYSIZE(threads), threads, /*waitall:*/ true, INFINITE))
+        if (WAIT_OBJECT_0 != WaitForMultipleObjects((DWORD)threads.size(), threads.data(), /*waitall:*/ true, INFINITE))
         {
             _com_error error(HRESULT_FROM_WIN32(GetLastError()));
-            err << "failed to wait on I/O threads: " << Narrow(error.ErrorMessage()) << endl;
+            cerr << "failed to wait on I/O threads: " << Narrow(error.ErrorMessage()) << endl;
             return false;
         }
     }
