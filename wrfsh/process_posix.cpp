@@ -5,10 +5,13 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <typeinfo>
 
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <pthread.h>
+#include <string.h>
 #include <assert.h>
 
 #include "stream_ex.h"
@@ -69,6 +72,55 @@ private:
     bool m_closed;
 };
 
+struct ReadThreadArgs
+{
+    ManagedHandle* childHandle; // For talking with the child process
+    ostream* stream; // For talking with the shell
+};
+
+struct WriteThreadArgs
+{
+    ManagedHandle* childHandle;
+    istream* stream;
+};
+
+void* ReadThreadProc(void *param)
+{
+    auto args = reinterpret_cast<ReadThreadArgs*>(param);
+    ostream* out = args->stream;
+
+    char readBuf[512];
+    for (;;)
+    {
+        ssize_t bytesRead = read(*(args->childHandle), readBuf, 512);
+        if (bytesRead == -1)
+        {
+            cerr << "read error: " << strerror(errno) << endl;
+            break;
+        }
+
+        cout << __FUNCTION__ << " read " << bytesRead << " bytes\n";
+
+        if (bytesRead == 0)
+        {
+            break;
+        }
+
+        out->write(readBuf, bytesRead);
+    }
+
+    return nullptr;
+}
+
+void* WriteThreadProc(void* param)
+{
+    auto args = reinterpret_cast<WriteThreadArgs*>(param);
+    (void)args;
+    cout << "hello from write proc\n";
+
+    return nullptr;
+}
+
 bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
 {
     *pExitCode = -1;
@@ -82,13 +134,13 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
         ManagedHandle& threadFd,
         ManagedHandle& readFd,
         ManagedHandle& writeFd,
-        ios& stream,
-        ios& stdStream,
+        ios* stream,
+        ios* stdStream,
         int stdFd)
     {
-        auto str_ex = dynamic_cast<stream_ex*>(&stream);
-        if ((str_ex == nullptr) ? (&stream == &stdStream)
-                                : (*str_ex == stdStream))
+        auto str_ex = dynamic_cast<stream_ex*>(stream);
+        if ((str_ex == nullptr) ? (stream == stdStream)
+                                : (*str_ex == *stdStream))
         {
             // It's a standard stream, or a stream_ex wrapping a standard stream.
             childFd = stdFd;
@@ -111,25 +163,25 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
                 needs_io_thread = true;
                 int fd[2];
                 pipe(fd);
-                writeFd = fd[0];
-                readFd = fd[1];
+                readFd = fd[0];
+                writeFd = fd[1];
             }
         }
     };
 
-    // child  thread       read         write       stream  std   fd
-    fn(fdIn,  fdThreadIn,  fdIn,        fdThreadIn, in,     cin,  0);
-    fn(fdOut, fdThreadOut, fdThreadOut, fdOut,      out,    cout, 1);
-    fn(fdErr, fdThreadErr, fdThreadErr, fdErr,      err,    cerr, 2);
+    // child  thread       read         write       stream  std    fd
+    fn(fdIn,  fdThreadIn,  fdIn,        fdThreadIn, &in,    &cin,  0);
+    fn(fdOut, fdThreadOut, fdThreadOut, fdOut,      &out,   &cout, 1);
+    fn(fdErr, fdThreadErr, fdThreadErr, fdErr,      &err,   &cerr, 2);
 
     //TODO FIXME
     if (needs_io_thread)
     {
-        fdIn.LeaveOpen();
-        fdOut.LeaveOpen();
-        fdErr.LeaveOpen();
-        err << "error: redirected I/O for child processes not supported on Posix (yet).\n";
-        return false;
+        //fdIn.LeaveOpen();
+        //fdOut.LeaveOpen();
+        //fdErr.LeaveOpen();
+        //err << "error: redirected I/O for child processes not supported on Posix (yet).\n";
+        //return false;
     }
 
     pid_t pid = fork();
@@ -144,22 +196,28 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
 
         if (needs_io_thread)
         {
-            dup2(fdIn,  0);
-            dup2(fdOut, 1);
-            dup2(fdErr, 2);
+            auto prepareFDs = [](
+                ManagedHandle& myFd,
+                ManagedHandle& threadFd,
+                int standardFd
+                )
+            {
+                if (threadFd != -1)
+                {
+                    dup2(myFd, standardFd);
+                    myFd.Close();
+                    threadFd.Close();
+                }
+            };
 
-            fdIn.Close();
-            fdOut.Close();
-            fdErr.Close();
-
-            fdThreadIn.Close();
-            fdThreadOut.Close();
-            fdThreadErr.Close();
+            prepareFDs(fdIn, fdThreadIn, 0);
+            prepareFDs(fdOut, fdThreadOut, 1);
+            prepareFDs(fdErr, fdThreadErr, 2);
         }
 
         vector<const char*> args;
         args.push_back(m_program.c_str());
-        for (const auto& arg : m_args)
+        for (const string& arg : m_args)
         {
             args.push_back(arg.c_str());
         }
@@ -171,9 +229,42 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
     {
         // Parent
 
+        vector<pthread_t> threads;
+        pthread_t inThread, outThread, errThread;
+
+        WriteThreadArgs inThreadArgs;
+        ReadThreadArgs outThreadArgs, errThreadArgs;
+
         if (needs_io_thread)
         {
-            // TODO FIXME: start threads
+            // Start threads
+
+            auto createThread = [&threads](
+                auto* args,
+                pthread_t& thread,
+                ManagedHandle& fdThread,
+                ManagedHandle& fdChild,
+                auto* stream,
+                void*(*threadProc)(void*)
+                )
+            {
+                if (fdThread != -1)
+                {
+                    fdChild.Close();
+                    args->childHandle = addressof(fdThread);
+                    args->stream = stream;
+                    int result = pthread_create(&thread, nullptr, threadProc, args);
+                    if (result != 0)
+                    {
+                        cerr << "failed to create thread: " << strerror(errno) << endl;
+                    }
+                    threads.push_back(thread);
+                }
+            };
+
+            createThread(&inThreadArgs, inThread, fdThreadIn, fdIn, &in, WriteThreadProc);
+            createThread(&outThreadArgs, outThread, fdThreadOut, fdOut, &out, ReadThreadProc);
+            createThread(&errThreadArgs, errThread, fdThreadErr, fdErr, &err, ReadThreadProc);
         }
         else
         {
@@ -186,7 +277,10 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
 
         if (needs_io_thread)
         {
-            // TODO FIXME: Wait on threads
+            for (pthread_t thread : threads)
+            {
+                pthread_join(thread, /* retval: */ nullptr);
+            }
         }
 
         return true;
