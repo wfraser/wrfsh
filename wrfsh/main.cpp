@@ -34,7 +34,7 @@ int real_main(int argc, char *argv[], char *envp[])
             in = make_unique<istream_ex>(&cin);
         }
 
-        exitCode = repl(*in.get(), out, err, gs);
+        exitCode = repl(*in.get(), out, err, gs, cin);
     }
     catch (...)
     {

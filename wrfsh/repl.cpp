@@ -87,7 +87,7 @@ struct program_line
             // Not a commandlet. Run the command.
 
             Process p(command, args);
-            bool ok = p.Run(cin, out, err, &retval);
+            bool ok = p.Run(in, out, err, &retval);
 
             if (!ok)
             {
@@ -189,40 +189,9 @@ string process_expression(const string& expression, global_state& global_state, 
             {
                 string command_line = result.substr(bt_substitution_start_pos);
 
-                command_line = process_expression(command_line, global_state, in, err);
-
-                auto pos = command_line.find_first_of(' ');
-                string command = command_line.substr(0, pos);
-                vector<string> args = { "" };
-                for (size_t cmd_i = pos + 1, cmd_n = command_line.size() - 1; cmd_i < cmd_n; cmd_i++)
-                {
-                    char cmd_c = command_line[cmd_i];
-                    if (cmd_i == ' ')
-                    {
-                        args.emplace_back("");
-                    }
-                    else
-                    {
-                        args.back().push_back(cmd_c);
-                    }
-                }
-
+                stringstream input(command_line);
                 stringstream output;
-
-                // Commandlets are not supported inside backticks.
-                Process p(command, args);
-                int exitCode;
-
-                // (Don't check for error condition)
-                p.Run(cin, output, err, &exitCode);
-
-                // If commandlets are to be supported inside backticks, use this block instead (and remove the process_expression above):
-                /*
-                program_line cmd;
-                cmd.command = command;
-                cmd.args = args;
-                int exitCode = cmd.execute(in, output, err, global_state);
-                */
+                int exitCode = repl(input, output, err, global_state, in);
 
                 global_state.let("?", to_string(exitCode));
 
@@ -263,7 +232,7 @@ string process_expression(const string& expression, global_state& global_state, 
     return result;
 }
 
-int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
+int repl(istream& in, ostream& out, ostream& err, global_state& global_state, istream& process_input)
 {
     int exitCode = 0;
     program_line command;
@@ -384,7 +353,7 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state)
                 {
                     //command.print(out); //DEBUG
 
-                    exitCode = command.execute(in, out, err, global_state);
+                    exitCode = command.execute(process_input, out, err, global_state);
 
                     if (global_state.exit)
                     {

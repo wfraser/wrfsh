@@ -6,7 +6,8 @@ int repl(
     std::istream& in,
     std::ostream& out,
     std::ostream& err,
-    global_state& global_state
+    global_state& global_state,
+    std::istream& process_input
     );
 
 std::string process_expression(
