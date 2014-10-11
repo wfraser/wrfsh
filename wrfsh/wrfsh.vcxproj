@@ -162,7 +162,12 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="commandlets.cpp" />
     <ClCompile Include="process.cpp" />
-    <ClCompile Include="process_posix.cpp" />
+    <ClCompile Include="process_posix.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="process_win32.cpp" />
     <ClCompile Include="repl.cpp" />
     <ClCompile Include="stream_ex.cpp" />
