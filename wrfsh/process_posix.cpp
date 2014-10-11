@@ -99,8 +99,6 @@ void* ReadThreadProc(void *param)
             break;
         }
 
-        cout << __FUNCTION__ << " read " << bytesRead << " bytes\n";
-
         if (bytesRead == 0)
         {
             break;
@@ -115,7 +113,9 @@ void* ReadThreadProc(void *param)
 void* WriteThreadProc(void* param)
 {
     auto args = reinterpret_cast<WriteThreadArgs*>(param);
-    (void)args;
+    
+    //TODO FIXME
+    (void) args;
     cout << "hello from write proc\n";
 
     return nullptr;
@@ -173,16 +173,6 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
     fn(fdIn,  fdThreadIn,  fdIn,        fdThreadIn, &in,    &cin,  0);
     fn(fdOut, fdThreadOut, fdThreadOut, fdOut,      &out,   &cout, 1);
     fn(fdErr, fdThreadErr, fdThreadErr, fdErr,      &err,   &cerr, 2);
-
-    //TODO FIXME
-    if (needs_io_thread)
-    {
-        //fdIn.LeaveOpen();
-        //fdOut.LeaveOpen();
-        //fdErr.LeaveOpen();
-        //err << "error: redirected I/O for child processes not supported on Posix (yet).\n";
-        //return false;
-    }
 
     pid_t pid = fork();
     if (pid == -1)
