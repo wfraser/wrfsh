@@ -31,6 +31,7 @@ int real_main(int argc, char *argv[], char *envp[])
         }
         else
         {
+            gs.interactive = true;
             in = make_unique<istream_ex>(&cin);
         }
 
