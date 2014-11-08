@@ -27,15 +27,14 @@ int real_main(int argc, char *argv[], char *envp[])
         ostream_ex out(&cout);
         ostream_ex err(&cerr);
 
-#if 0
         if (argc == 2)
         {
             istream_ex in(ospath(argv[1]));
             exitCode = repl(in, out, err, gs, cin);
         }
         else
-#endif
         {
+            gs.interactive = true;
             //in = make_unique<istream_ex>(&cin);
 
             stringstream buffer;
@@ -52,7 +51,7 @@ int real_main(int argc, char *argv[], char *envp[])
                 exitCode = repl(in, con->ostream(), con->ostream(), gs, cin);
 
                 if (gs.exit)
-                {
+        {
                     break;
                 }
             }
