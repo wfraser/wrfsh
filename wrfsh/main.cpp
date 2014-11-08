@@ -6,11 +6,14 @@
 #include <unordered_map>
 #include <list>
 #include <memory>
+#include <sstream>
+#include <streambuf>
 
 #include "common.h"
 #include "global_state.h"
 #include "repl.h"
 #include "stream_ex.h"
+#include "console.h"
 
 using namespace std;
 
@@ -21,20 +24,39 @@ int real_main(int argc, char *argv[], char *envp[])
     {
         global_state gs(argc, argv, envp);
 
-        unique_ptr<istream_ex> in;
         ostream_ex out(&cout);
         ostream_ex err(&cerr);
 
+#if 0
         if (argc == 2)
         {
-            in = make_unique<istream_ex>(ospath(argv[1]));
+            istream_ex in(ospath(argv[1]));
+            exitCode = repl(in, out, err, gs, cin);
         }
         else
+#endif
         {
-            in = make_unique<istream_ex>(&cin);
-        }
+            //in = make_unique<istream_ex>(&cin);
 
-        exitCode = repl(*in.get(), out, err, gs, cin);
+            stringstream buffer;
+            istream_ex in(&buffer);
+
+            unique_ptr<Console> con(Console::Make());
+
+            for (;;)
+            {
+                con->Prompt();
+                string line = con->GetInput();
+                in.clear();
+                buffer << line;
+                exitCode = repl(in, con->ostream(), con->ostream(), gs, cin);
+
+                if (gs.exit)
+                {
+                    break;
+                }
+            }
+        }
     }
     catch (...)
     {
