@@ -6,9 +6,11 @@
 #include <memory>
 #include <algorithm>
 #include <functional>
+#include <sstream>
 
 #include "common.h"
 #include "global_state.h"
+#include "repl.h"
 #include "commandlets.h"
 
 using namespace std;
@@ -57,14 +59,66 @@ int echo_commandlet(istream& /*in*/, ostream& out, ostream& /*err*/, global_stat
 
 int list_commandlet(istream& /*in*/, ostream& out, ostream& /*err*/, global_state& state, vector<string>& /*args*/)
 {
+    //TODO: parse an int argument for listing a single line
+
     for (const auto& line : state.stored_program)
     {
         out << line.number << " " << line.command;
-        for (size_t i = 0, n = line.args.size(); i < n; i++)
+        for (const auto& arg : line.args)
         {
-            out << " " << line.args.at(i) << ((i == n - 1) ? "\n" : "");
+            out << " " << arg;
         }
+        out << endl;
     }
+    return 0;
+}
+
+int run_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
+{
+    if (!state.interactive)
+    {
+        err << "Error: the stored program functionality only works in an interactive session.\n";
+        state.error = true;
+        return -1;
+    }
+
+    if (args.size() > 1)
+    {
+        err << "Syntax error: \"run\" only takes one argument, a line number to start at.\n";
+        state.error = true;
+        return -1;
+    }
+
+    //TODO parse arg and start program at that line number
+
+    state.interactive = false;
+    stringstream program_stream;
+    for (const auto& line : state.stored_program)
+    {
+        program_stream << line.command;
+        for (const auto& arg : line.args)
+        {
+            program_stream << " " << arg;
+        }
+        program_stream << endl;
+    }
+    int retval = repl(program_stream, out, err, state, in);
+    state.interactive = true;
+
+    return retval;
+}
+
+int new_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_state& state, vector<string>& args)
+{
+    if (args.size() != 0)
+    {
+        err << "Syntax error: \"new\" doesn't take any arguments.\n";
+        state.error = true;
+        return -1;
+    }
+
+    state.stored_program.clear();
+
     return 0;
 }
 
@@ -124,5 +178,7 @@ unordered_map<string, commandlet_function> special_functions(
     DEFINE_COMMANDLET(endif),   //
     DEFINE_COMMANDLET(echo),
     DEFINE_COMMANDLET(list),
+    DEFINE_COMMANDLET(run),
+    DEFINE_COMMANDLET(new),
     DEFINE_COMMANDLET(exit),
 });

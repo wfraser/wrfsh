@@ -19,6 +19,8 @@ typedef int (*commandlet_function)(
 COMMANDLET(let);
 COMMANDLET(echo);
 COMMANDLET(list);
+COMMANDLET(run);
+COMMANDLET(new);
 COMMANDLET(if);
 COMMANDLET(else);
 COMMANDLET(endif);
