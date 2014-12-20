@@ -97,7 +97,7 @@ void Console_Win32::AdvanceCursorPos(int n)
     CHKERR(SetConsoleCursorPosition(m_outputHandle, m_cursorPos));
 }
 
-void Console_Win32::UpdatePartialCommand(int currentLineLength)
+void Console_Win32::ReplaceCurrentLine(int currentLineLength)
 {
     AdvanceCursorPos(-1 * currentLineLength);
     EchoString(wstring(currentLineLength, L' '));
@@ -143,7 +143,7 @@ string Console_Win32::GetInput()
                     {
                         int len = static_cast<int>(line.size());
                         m_currentInputLineIdx++;
-                        UpdatePartialCommand(len);
+                        ReplaceCurrentLine(len);
                         line = m_inputLines[m_currentInputLineIdx];
                         linePos = line.size();
                     }
@@ -153,7 +153,7 @@ string Console_Win32::GetInput()
                     {
                         int len = static_cast<int>(line.size());
                         m_currentInputLineIdx--;
-                        UpdatePartialCommand(len);
+                        ReplaceCurrentLine(len);
                         line = m_inputLines[m_currentInputLineIdx];
                         linePos = line.size();
                     }
