@@ -97,9 +97,19 @@ void Console_Win32::AdvanceCursorPos(int n)
     CHKERR(SetConsoleCursorPosition(m_outputHandle, m_cursorPos));
 }
 
+void Console_Win32::UpdatePartialCommand(int currentLineLength)
+{
+    AdvanceCursorPos(-1 * currentLineLength);
+    EchoString(wstring(currentLineLength, L' '));
+    AdvanceCursorPos(-1 * currentLineLength);
+
+    EchoString(m_inputLines[m_currentInputLineIdx]);
+}
+
 string Console_Win32::GetInput()
 {
     wstring line;
+    size_t linePos = 0;
 
     for (;;)
     {
@@ -113,12 +123,13 @@ string Console_Win32::GetInput()
 
             if (rec.uChar.UnicodeChar == L'\b')
             {
-                if (rec.bKeyDown && line.length() > 0)
+                if (rec.bKeyDown && linePos > 0)
                 {
                     AdvanceCursorPos(-1);
                     EchoChar(L' ');
                     AdvanceCursorPos(-1);
-                    line.pop_back();
+                    line.erase(linePos - 1);
+                    linePos--;
                 }
                 continue;
             }
@@ -128,10 +139,40 @@ string Console_Win32::GetInput()
                 switch (rec.wVirtualKeyCode)
                 {
                 case VK_DOWN:
+                    if (m_currentInputLineIdx < m_inputLines.size() - 1)
+                    {
+                        int len = static_cast<int>(line.size());
+                        m_currentInputLineIdx++;
+                        UpdatePartialCommand(len);
+                        line = m_inputLines[m_currentInputLineIdx];
+                        linePos = line.size();
+                    }
+                    break;
                 case VK_UP:
+                    if (m_currentInputLineIdx > 0)
+                    {
+                        int len = static_cast<int>(line.size());
+                        m_currentInputLineIdx--;
+                        UpdatePartialCommand(len);
+                        line = m_inputLines[m_currentInputLineIdx];
+                        linePos = line.size();
+                    }
+                    break;
                 case VK_LEFT:
+                    if (line.size() > 0 && linePos > 0)
+                    {
+                        AdvanceCursorPos(-1);
+                        linePos--;
+                        // TODO: update line pos
+                        // TODO: add line moving logic
+                    }
+                    break;
                 case VK_RIGHT:
-                    //TODO: scroll through history
+                    if (line.size() > linePos)
+                    {
+                        AdvanceCursorPos(1);
+                        linePos++;
+                    }
                     break;
                 }
             }
@@ -146,7 +187,18 @@ string Console_Win32::GetInput()
                 if (rec.bKeyDown/* || !m_lastKeyInputDown*/)
                 {
                     EchoChar(rec.uChar.UnicodeChar);
-                    line.push_back(rec.uChar.UnicodeChar);
+                    if (rec.wVirtualKeyCode != VK_RETURN)
+                    {
+                        line.insert(linePos, 1, rec.uChar.UnicodeChar);
+                        linePos++;
+                        if (linePos < line.size())
+                        {
+                            // Echo the rest of the line because we inserted
+                            // in the middle of the line.
+                            EchoString(line.substr(linePos));
+                            AdvanceCursorPos(static_cast<int>(linePos) - static_cast<int>(line.size()));
+                        }
+                    }
                     m_lastKeyInputDown = true;
                 }
 
@@ -156,8 +208,6 @@ string Console_Win32::GetInput()
 
                     if (rec.wVirtualKeyCode == VK_RETURN)
                     {
-                        line[line.length() - 1] = L'\n';    // replace the '\r'
-
                         m_inputLines.push_back(line);
                         m_currentInputLineIdx++;
 

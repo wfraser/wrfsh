@@ -87,6 +87,7 @@ private:
     void GetWindowInfo();
     void EchoChar(wchar_t c, WORD attrs = 0);
     void EchoString(const std::wstring& s, WORD attrs = 0);
+    void UpdatePartialCommand(int currentLineLength);
 
     HANDLE m_inputHandle;
     HANDLE m_outputHandle;

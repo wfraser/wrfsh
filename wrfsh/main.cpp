@@ -35,7 +35,6 @@ int real_main(int argc, char *argv[], char *envp[])
         else
         {
             gs.interactive = true;
-            //in = make_unique<istream_ex>(&cin);
 
             stringstream buffer;
             istream_ex in(&buffer);
@@ -51,7 +50,7 @@ int real_main(int argc, char *argv[], char *envp[])
                 exitCode = repl(in, con->ostream(), con->ostream(), gs, cin);
 
                 if (gs.exit)
-        {
+                {
                     break;
                 }
             }
