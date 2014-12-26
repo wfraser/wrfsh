@@ -57,18 +57,41 @@ int echo_commandlet(istream& /*in*/, ostream& out, ostream& /*err*/, global_stat
     return 0;
 }
 
-int list_commandlet(istream& /*in*/, ostream& out, ostream& /*err*/, global_state& state, vector<string>& /*args*/)
+int list_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& state, vector<string>& args)
 {
-    //TODO: parse an int argument for listing a single line
+    if (args.size() > 1)
+    {
+        err << "Syntax error: \"list\" only takes one argument, a line number to print.\n";
+        state.error = true;
+        return -1;
+    }
 
     for (const auto& line : state.stored_program)
     {
+        bool match = false;
+        if (args.size() == 1)
+        {
+            if (line.number == args[0])
+            {
+                match = true;
+            }
+            else
+            {
+                continue;
+            }
+        }
+
         out << line.number << " " << line.command;
         for (const auto& arg : line.args)
         {
             out << " " << arg;
         }
         out << endl;
+
+        if (match)
+        {
+            break;
+        }
     }
     return 0;
 }
@@ -89,18 +112,25 @@ int run_commandlet(istream& in, ostream& out, ostream& err, global_state& state,
         return -1;
     }
 
-    //TODO parse arg and start program at that line number
-
+    int start = 0;
+    if (args.size() == 1)
+    {
+        start = atoi(args[0].c_str());
+    }
+    
     state.interactive = false;
     stringstream program_stream;
     for (const auto& line : state.stored_program)
     {
-        program_stream << line.command;
-        for (const auto& arg : line.args)
+        if (atoi(line.number.c_str()) >= start)
         {
-            program_stream << " " << arg;
+            program_stream << line.command;
+            for (const auto& arg : line.args)
+            {
+                program_stream << " " << arg;
+            }
+            program_stream << endl;
         }
-        program_stream << endl;
     }
     int retval = repl(program_stream, out, err, state, in);
     state.interactive = true;

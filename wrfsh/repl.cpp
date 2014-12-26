@@ -93,6 +93,7 @@ struct program_line
             {
                 err << "process failed!\n";
                 retval = -1;
+                global_state.error = true;
             }
 
             // Save the return value as $?
@@ -475,8 +476,14 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state, is
             if (global_state.error)
             {
                 if (!global_state.interactive)
+                {
+                    // Error in a non-interactive (batch) script.
+                    // Terminate now.
                     break;
+                }
 
+                // Error in an interactive session.
+                // Do not terminate; just clear the error and continue to read input.
                 global_state.error = false;
             }
 
