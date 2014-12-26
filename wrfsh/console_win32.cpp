@@ -4,11 +4,14 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <assert.h>
 
 #include "common.h"
 #include "console.h"
 
 using namespace std;
+
+Console_Win32* Console_Win32::s_pInstance = nullptr;
 
 void chkerr(BOOL b, const char* what, const char* file, int line)
 {
@@ -27,6 +30,43 @@ void chkerr(DWORD dw, const char* what, const char* file, int line)
 
 #define CHKERR(_ex) chkerr(_ex, #_ex, __FILE__, __LINE__)
 
+BOOL WINAPI Console_Win32::CtrlHandler(DWORD dwCtrlType)
+{
+    Console_Win32* instance = s_pInstance;
+    assert(instance != nullptr);
+    if (instance == nullptr)
+    {
+        return TRUE;
+    }
+
+    switch (dwCtrlType)
+    {
+    case CTRL_C_EVENT:
+        {
+            int lineIdx = static_cast<int>(instance->m_currentInputLineIdx);
+            if (lineIdx == instance->m_inputLines.size() - 1)
+            {
+                // Current line is the last line -- hasn't been entered yet.
+                // Nuke the current line
+                instance->m_inputLines[lineIdx].clear();
+                instance->ReplaceCurrentLine(lineIdx);
+            }
+            else
+            {
+                // Current line is one previously entered.
+                // Switch to the empty line.
+                instance->NewEmptyLine();
+            }
+        }
+        break;
+    default:
+        assert(false);
+        OutputDebugStringA("unhandled ctrl-sequence\n");
+    }
+
+    return TRUE;
+}
+
 Console_Win32::Console_Win32()
     : m_streambuf(new Console_streambuf(this))
     , m_ostream(m_streambuf.get())
@@ -39,6 +79,19 @@ Console_Win32::Console_Win32()
     GetWindowInfo();
 
     m_currentInputLineIdx = 0;
+
+    assert(s_pInstance == nullptr);
+    s_pInstance = this;
+
+    // FIXME: this doesn't work for some reason.
+    CHKERR(SetConsoleCtrlHandler(&CtrlHandler, true));
+}
+
+Console_Win32::~Console_Win32()
+{
+    // TODO: set console mode back to whatever the default is.
+    CHKERR(SetConsoleCtrlHandler(nullptr, false));
+    s_pInstance = nullptr;
 }
 
 void Console_Win32::GetWindowInfo()
@@ -97,19 +150,29 @@ void Console_Win32::AdvanceCursorPos(int n)
     CHKERR(SetConsoleCursorPosition(m_outputHandle, m_cursorPos));
 }
 
-void Console_Win32::ReplaceCurrentLine(int currentLineLength)
+void Console_Win32::ReplaceCurrentLine(int newIndex)
 {
-    AdvanceCursorPos(-1 * currentLineLength);
-    EchoString(wstring(currentLineLength, L' '));
-    AdvanceCursorPos(-1 * currentLineLength);
+    AdvanceCursorPos(-1 * m_currentInputLinePos);
+    EchoString(wstring(m_currentInputLinePos, L' '));
+    AdvanceCursorPos(-1 * m_currentInputLinePos);
 
+    m_currentInputLineIdx = newIndex;
     EchoString(m_inputLines[m_currentInputLineIdx]);
+    m_currentInputLinePos = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
+}
+
+void Console_Win32::NewEmptyLine()
+{
+    if (m_inputLines.empty() || !m_inputLines.back().empty())
+    {
+        m_inputLines.push_back(L"");
+    }
+    ReplaceCurrentLine(static_cast<int>(m_inputLines.size()) - 1);
 }
 
 string Console_Win32::GetInput()
 {
-    wstring line;
-    size_t linePos = 0;
+    NewEmptyLine();
 
     for (;;)
     {
@@ -123,13 +186,23 @@ string Console_Win32::GetInput()
 
             if (rec.uChar.UnicodeChar == L'\b')
             {
-                if (rec.bKeyDown && linePos > 0)
+                if (rec.bKeyDown && m_currentInputLinePos > 0)
                 {
+                    m_currentInputLinePos--;
+                    m_inputLines[m_currentInputLineIdx].erase(m_currentInputLinePos, 1);
                     AdvanceCursorPos(-1);
-                    EchoChar(L' ');
-                    AdvanceCursorPos(-1);
-                    line.erase(linePos - 1);
-                    linePos--;
+                    if (m_currentInputLinePos == m_inputLines[m_currentInputLineIdx].size())
+                    {
+                        EchoChar(L' ');
+                        AdvanceCursorPos(-1);
+                    }
+                    else
+                    {
+                        auto str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
+                        EchoString(str);
+                        EchoChar(L' ');
+                        AdvanceCursorPos(-1 - static_cast<int>(str.size()));
+                    }
                 }
                 continue;
             }
@@ -141,37 +214,30 @@ string Console_Win32::GetInput()
                 case VK_DOWN:
                     if (m_currentInputLineIdx < m_inputLines.size() - 1)
                     {
-                        int len = static_cast<int>(line.size());
-                        m_currentInputLineIdx++;
-                        ReplaceCurrentLine(len);
-                        line = m_inputLines[m_currentInputLineIdx];
-                        linePos = line.size();
+                        ReplaceCurrentLine(m_currentInputLineIdx + 1);
+                        m_currentInputLinePos = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
                     }
                     break;
                 case VK_UP:
                     if (m_currentInputLineIdx > 0)
                     {
-                        int len = static_cast<int>(line.size());
-                        m_currentInputLineIdx--;
-                        ReplaceCurrentLine(len);
-                        line = m_inputLines[m_currentInputLineIdx];
-                        linePos = line.size();
+                        ReplaceCurrentLine(m_currentInputLineIdx - 1);
+                        m_currentInputLinePos = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
                     }
                     break;
                 case VK_LEFT:
-                    if (line.size() > 0 && linePos > 0)
+                    if (!m_inputLines[m_currentInputLineIdx].empty()
+                        && m_currentInputLinePos > 0)
                     {
                         AdvanceCursorPos(-1);
-                        linePos--;
-                        // TODO: update line pos
-                        // TODO: add line moving logic
+                        m_currentInputLinePos--;
                     }
                     break;
                 case VK_RIGHT:
-                    if (line.size() > linePos)
+                    if (m_inputLines[m_currentInputLineIdx].size() > m_currentInputLinePos)
                     {
                         AdvanceCursorPos(1);
-                        linePos++;
+                        m_currentInputLinePos++;
                     }
                     break;
                 }
@@ -179,6 +245,14 @@ string Console_Win32::GetInput()
 
             if (rec.uChar.UnicodeChar != L'\0')
             {
+                if (rec.uChar.UnicodeChar == 0x3)
+                {
+                    // FIXME: HACK because CtrlHandler doesn't work.
+                    // See comment in Console_Win32 constructor.
+                    CtrlHandler(CTRL_C_EVENT);
+                    continue;
+                }
+
                 // Basic characters
 
                 if (rec.uChar.UnicodeChar == '\r')
@@ -189,14 +263,14 @@ string Console_Win32::GetInput()
                     EchoChar(rec.uChar.UnicodeChar);
                     if (rec.wVirtualKeyCode != VK_RETURN)
                     {
-                        line.insert(linePos, 1, rec.uChar.UnicodeChar);
-                        linePos++;
-                        if (linePos < line.size())
+                        m_inputLines[m_currentInputLineIdx].insert(m_currentInputLinePos, 1, rec.uChar.UnicodeChar);
+                        m_currentInputLinePos++;
+                        if (m_currentInputLinePos < m_inputLines[m_currentInputLineIdx].size())
                         {
                             // Echo the rest of the line because we inserted
                             // in the middle of the line.
-                            EchoString(line.substr(linePos));
-                            AdvanceCursorPos(static_cast<int>(linePos) - static_cast<int>(line.size()));
+                            EchoString(m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos));
+                            AdvanceCursorPos(static_cast<int>(m_currentInputLinePos) - static_cast<int>(m_inputLines[m_currentInputLineIdx].size()));
                         }
                     }
                     m_lastKeyInputDown = true;
@@ -208,10 +282,8 @@ string Console_Win32::GetInput()
 
                     if (rec.wVirtualKeyCode == VK_RETURN)
                     {
-                        m_inputLines.push_back(line);
-                        m_currentInputLineIdx++;
-
-                        return Narrow(line);
+                        m_currentInputLinePos = 0;
+                        return Narrow(m_inputLines[m_currentInputLineIdx]);
                     }
 
                 }

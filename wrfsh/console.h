@@ -77,6 +77,7 @@ class Console_Win32 : public Console
 {
 public:
     Console_Win32();
+    ~Console_Win32();
 
     virtual std::string GetInput();
     virtual void WriteOutput(const std::string& s, CharAttr attrs = CharAttr::None);
@@ -87,12 +88,16 @@ private:
     void GetWindowInfo();
     void EchoChar(wchar_t c, WORD attrs = 0);
     void EchoString(const std::wstring& s, WORD attrs = 0);
-    void ReplaceCurrentLine(int currentLineLength);
+    void NewEmptyLine();
+    void ReplaceCurrentLine(int newIndex);
+
+    static BOOL WINAPI CtrlHandler(DWORD dwCtrlType);
 
     HANDLE m_inputHandle;
     HANDLE m_outputHandle;
     std::vector<std::wstring> m_inputLines;
-    size_t m_currentInputLineIdx;
+    int m_currentInputLineIdx;
+    int m_currentInputLinePos;
 
     COORD m_cursorPos;
     COORD m_windowSize;
@@ -101,6 +106,8 @@ private:
     std::ostream m_ostream;
 
     bool m_lastKeyInputDown; // hack
+
+    static Console_Win32* s_pInstance;
 };
 
 #else
