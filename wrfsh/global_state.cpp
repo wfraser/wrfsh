@@ -11,11 +11,7 @@ using namespace std;
 global_state::global_state(int argc, const char * const argv [], const char * const env []) :
     interactive(false),
     error(false),
-    exit(false),
-    environment({}),
-    local_vars({}),
-    stored_program({}),
-    if_state({})
+    exit(false)
 {
     for (int i = 0; i < argc; i++)
     {

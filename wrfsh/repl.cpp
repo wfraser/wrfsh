@@ -26,8 +26,10 @@ struct program_line
     program_line() :
         special(),
         command(),
-        args({ string() }) // ensure there's an empty arg to push characters onto
+        args()
     {
+        // ensure there's an empty arg to push characters onto
+        args.push_back("");
     }
 
     void reset()

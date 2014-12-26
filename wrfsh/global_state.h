@@ -24,7 +24,7 @@ public:
         program_line() :
             number(""),
             command(""),
-            args({})
+            args()
         {}
     };
     std::list<program_line> stored_program;
