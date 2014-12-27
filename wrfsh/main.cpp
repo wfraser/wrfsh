@@ -35,24 +35,20 @@ int real_main(int argc, char *argv[], char *envp[])
         else
         {
             gs.interactive = true;
+            exitCode = -1;
 
             stringstream buffer;
             istream_ex in(&buffer);
 
             unique_ptr<Console> con(Console::Make());
 
-            for (;;)
+            while (!gs.exit)
             {
                 con->Prompt();
                 string line = con->GetInput();
                 in.clear();
                 buffer << line;
                 exitCode = repl(in, con->ostream(), con->ostream(), gs, cin);
-
-                if (gs.exit)
-                {
-                    break;
-                }
             }
         }
     }
