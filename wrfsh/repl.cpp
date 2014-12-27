@@ -128,7 +128,7 @@ string process_expression(const string& expression, global_state& global_state, 
         {
             string::size_type len = result.size() - var_substitution_start_pos;
 
-            static const string allowed_variable_special_characters = "#*@!_?$";
+            // This set of variables is taken from Bash. Not all of them may end up being implemented.
             // $# = number of positional parameters
             // $* = positional parameters strung together as a single word
             // $@ = positional parameters *as separate words* (doesn't work yet)
@@ -136,6 +136,7 @@ string process_expression(const string& expression, global_state& global_state, 
             // $_ = last positional parameter of previous command (doesn't work yet)
             // $? = exit status of previous command
             // $$ = current PID (doesn't work yet)
+            static const string allowed_variable_special_characters = "#*@!_?$";
 
             if (i == n
                 || (!isalnum(c, locale::classic())

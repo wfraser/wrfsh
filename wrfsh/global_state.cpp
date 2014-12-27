@@ -60,6 +60,14 @@ std::string global_state::lookup_var(string key)
 
         return result;
     }
+    else if (key == "$")
+    {
+#ifdef _MSC_VER
+        return to_string(GetCurrentProcessId());
+#else
+        return to_string(getpid());
+#endif
+    }
 
     auto pos = local_vars.find(key);
     if (pos != local_vars.end())

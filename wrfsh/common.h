@@ -7,6 +7,12 @@
 #include <Windows.h>
 
 #define snprintf(buf, n, format, ...)  _snprintf_s(buf, n, n, format, __VA_ARGS__)
+
+#else
+// Posix
+
+#include <unistd.h>
+
 #endif
 
 #ifdef __CYGWIN__
