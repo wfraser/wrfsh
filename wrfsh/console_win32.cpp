@@ -36,7 +36,7 @@ BOOL WINAPI Console_Win32::CtrlHandler(DWORD dwCtrlType)
     assert(instance != nullptr);
     if (instance == nullptr)
     {
-        return TRUE;
+        return FALSE;
     }
 
     switch (dwCtrlType)
@@ -47,9 +47,9 @@ BOOL WINAPI Console_Win32::CtrlHandler(DWORD dwCtrlType)
             if (lineIdx == instance->m_inputLines.size() - 1)
             {
                 // Current line is the last line -- hasn't been entered yet.
-                // Nuke the current line
-                instance->m_inputLines[lineIdx].clear();
-                instance->ReplaceCurrentLine(lineIdx);
+                // Clear the current line.
+                instance->ClearCurrentDisplayLine();
+                instance->m_inputLines[instance->m_currentInputLineIdx].clear();
             }
             else
             {
@@ -58,13 +58,11 @@ BOOL WINAPI Console_Win32::CtrlHandler(DWORD dwCtrlType)
                 instance->NewEmptyLine();
             }
         }
-        break;
+        return TRUE;
     default:
-        assert(false);
         OutputDebugStringA("unhandled ctrl-sequence\n");
+        return FALSE;
     }
-
-    return TRUE;
 }
 
 Console_Win32::Console_Win32()
@@ -74,7 +72,7 @@ Console_Win32::Console_Win32()
     m_inputHandle = GetStdHandle(STD_INPUT_HANDLE);
     m_outputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 
-    CHKERR(SetConsoleMode(m_inputHandle, ENABLE_QUICK_EDIT_MODE | ENABLE_WINDOW_INPUT));
+    CHKERR(SetConsoleMode(m_inputHandle, ENABLE_QUICK_EDIT_MODE | ENABLE_WINDOW_INPUT | ENABLE_PROCESSED_INPUT));
 
     GetWindowInfo();
 
@@ -152,9 +150,7 @@ void Console_Win32::AdvanceCursorPos(int n)
 
 void Console_Win32::ReplaceCurrentLine(int newIndex)
 {
-    AdvanceCursorPos(-1 * m_currentInputLinePos);
-    EchoString(wstring(m_currentInputLinePos, L' '));
-    AdvanceCursorPos(-1 * m_currentInputLinePos);
+    ClearCurrentDisplayLine();
 
     m_currentInputLineIdx = newIndex;
     EchoString(m_inputLines[m_currentInputLineIdx]);
@@ -168,6 +164,16 @@ void Console_Win32::NewEmptyLine()
         m_inputLines.push_back(L"");
     }
     ReplaceCurrentLine(static_cast<int>(m_inputLines.size()) - 1);
+}
+
+void Console_Win32::ClearCurrentDisplayLine()
+{
+    int currentLineLen = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
+
+    AdvanceCursorPos(-1 * m_currentInputLinePos);
+    EchoString(wstring(currentLineLen, L' '));
+    AdvanceCursorPos(-1 * currentLineLen);
+    m_currentInputLinePos = 0;
 }
 
 string Console_Win32::GetInput()
@@ -243,16 +249,14 @@ string Console_Win32::GetInput()
                 }
             }
 
+            if ((rec.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0)
+            {
+                // Don't process ctrl-key events.
+                continue;
+            }
+
             if (rec.uChar.UnicodeChar != L'\0')
             {
-                if (rec.uChar.UnicodeChar == 0x3)
-                {
-                    // FIXME: HACK because CtrlHandler doesn't work.
-                    // See comment in Console_Win32 constructor.
-                    CtrlHandler(CTRL_C_EVENT);
-                    continue;
-                }
-
                 // Basic characters
 
                 if (rec.uChar.UnicodeChar == '\r')

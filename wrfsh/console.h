@@ -90,6 +90,7 @@ private:
     void EchoString(const std::wstring& s, WORD attrs = 0);
     void NewEmptyLine();
     void ReplaceCurrentLine(int newIndex);
+    void ClearCurrentDisplayLine();
 
     static BOOL WINAPI CtrlHandler(DWORD dwCtrlType);
 
