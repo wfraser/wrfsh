@@ -21,14 +21,14 @@ public:
         Underline = 0x8000,
     };
 
-    static Console* Make();
+    static Console* make();
 
-    virtual std::string GetInput() = 0;
-    virtual void WriteOutput(const std::string& s, CharAttr attrs = CharAttr::None) = 0;
+    virtual std::string get_input() = 0;
+    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None) = 0;
     virtual std::ostream& ostream() = 0;
-    virtual void AdvanceCursorPos(int n) = 0;
+    virtual void advance_cursor_pos(int n) = 0;
 
-    void Prompt();
+    void prompt();
 };
 
 inline Console::CharAttr operator|(Console::CharAttr x, Console::CharAttr y)
@@ -63,7 +63,7 @@ public:
 
     std::streamsize xsputn(const char* s, std::streamsize n)
     {
-        m_console->WriteOutput(std::string(s, n));
+        m_console->write_output(std::string(s, n));
         return n;
     }
 
@@ -79,20 +79,20 @@ public:
     Console_Win32();
     ~Console_Win32();
 
-    virtual std::string GetInput();
-    virtual void WriteOutput(const std::string& s, CharAttr attrs = CharAttr::None);
+    virtual std::string get_input();
+    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None);
     virtual std::ostream& ostream();
-    virtual void AdvanceCursorPos(int n);
+    virtual void advance_cursor_pos(int n);
 
 private:
-    void GetWindowInfo();
-    void EchoChar(wchar_t c, WORD attrs = 0);
-    void EchoString(const std::wstring& s, WORD attrs = 0);
-    void NewEmptyLine();
-    void ReplaceCurrentLine(int newIndex);
-    void ClearCurrentDisplayLine();
+    void get_window_info();
+    void echo_char(wchar_t c, WORD attrs = 0);
+    void echo_string(const std::wstring& s, WORD attrs = 0);
+    void new_empty_line();
+    void replace_current_line(int newIndex);
+    void clear_current_display_line();
 
-    static BOOL WINAPI CtrlHandler(DWORD dwCtrlType);
+    static BOOL WINAPI ctrl_handler(DWORD dwCtrlType);
 
     HANDLE m_inputHandle;
     HANDLE m_outputHandle;

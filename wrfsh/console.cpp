@@ -8,7 +8,7 @@
 
 using namespace std;
 
-Console* Console::Make()
+Console* Console::make()
 {
 #ifdef _MSC_VER
     return new Console_Win32();
@@ -17,7 +17,7 @@ Console* Console::Make()
 #endif
 }
 
-void Console::Prompt()
+void Console::prompt()
 {
-    WriteOutput("wrfsh> ", CharAttr::FG_Green | CharAttr::FG_Bold);
+    write_output("wrfsh> ", CharAttr::FG_Green | CharAttr::FG_Bold);
 }

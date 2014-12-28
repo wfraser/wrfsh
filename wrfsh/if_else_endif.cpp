@@ -42,11 +42,11 @@ namespace IfExpression
         Expression() : type(Type::Empty)
         {}
 
-        bool Evaluate(istream& in, ostream& out, ostream& err, global_state& state)
+        bool evaluate(istream& in, ostream& out, ostream& err, global_state& state)
         {
             if (type == Type::CompoundExpression)
             {
-                bool left = compound_expression->expr1->Evaluate(in, out, err, state);
+                bool left = compound_expression->expr1->evaluate(in, out, err, state);
                 if (state.error)
                 {
                     return false;
@@ -58,7 +58,7 @@ namespace IfExpression
                 }
                 else if ((compound_expression->op == "&&" && left) || (compound_expression->op == "||" && !left))
                 {
-                    bool right = compound_expression->expr2->Evaluate(in, out, err, state);
+                    bool right = compound_expression->expr2->evaluate(in, out, err, state);
                     if (state.error)
                     {
                         return false;
@@ -142,7 +142,7 @@ namespace IfExpression
         }
     };
 
-    void PrintAST(ostream& out, Expression& exp, int nesting_level)
+    void print_ast(ostream& out, Expression& exp, int nesting_level)
     {
         out << string(nesting_level * 4, ' ')
             << "expression type ";
@@ -167,7 +167,7 @@ namespace IfExpression
             }
             else
             {
-                PrintAST(out, *e1, nesting_level + 1);
+                print_ast(out, *e1, nesting_level + 1);
             }
 
             out << string((nesting_level + 1) * 4, ' ') << exp.compound_expression->op << endl;
@@ -179,7 +179,7 @@ namespace IfExpression
             }
             else
             {
-                PrintAST(out, *e2, nesting_level + 1);
+                print_ast(out, *e2, nesting_level + 1);
             }
         }
         else
@@ -188,7 +188,7 @@ namespace IfExpression
         }
     }
 
-    bool ParseIfExpression(const vector<string>& args, Expression& root_expression, ostream& err)
+    bool parse_if_expression(const vector<string>& args, Expression& root_expression, ostream& err)
     {
         // EBNF:
         // initial = "if" , comparison ;
@@ -357,7 +357,7 @@ int if_commandlet(istream& in, ostream& out, ostream& err, global_state& global_
 {
     IfExpression::Expression root_expression;
 
-    bool successful_parse = IfExpression::ParseIfExpression(args, root_expression, err);
+    bool successful_parse = IfExpression::parse_if_expression(args, root_expression, err);
 
     if (!successful_parse)
     {
@@ -366,9 +366,9 @@ int if_commandlet(istream& in, ostream& out, ostream& err, global_state& global_
     }
 
     //DEBUG print AST
-    //IfExpression::PrintAST(out, root_expression, 0);
+    //IfExpression::print_ast(out, root_expression, 0);
 
-    bool if_result = root_expression.Evaluate(in, out, err, global_state);
+    bool if_result = root_expression.evaluate(in, out, err, global_state);
     if (global_state.error)
     {
         return -1;

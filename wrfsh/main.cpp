@@ -40,12 +40,12 @@ int real_main(int argc, char *argv[], char *envp[])
             stringstream buffer;
             istream_ex in(&buffer);
 
-            unique_ptr<Console> con(Console::Make());
+            unique_ptr<Console> con(Console::make());
 
             while (!gs.exit)
             {
-                con->Prompt();
-                string line = con->GetInput();
+                con->prompt();
+                string line = con->get_input();
                 in.clear();
                 buffer << line;
                 exitCode = repl(in, con->ostream(), con->ostream(), gs, cin);
