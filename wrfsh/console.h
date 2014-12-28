@@ -114,6 +114,19 @@ private:
 #else
 
 class Console_Posix : public Console
-{};
+{
+public:
+    Console_Posix();
+    ~Console_Posix();
+
+    virtual std::string get_input();
+    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None);
+    virtual std::ostream& ostream();
+    virtual void advance_cursor_pos(int n);
+
+private:
+    std::unique_ptr<Console_streambuf> m_streambuf;
+    std::ostream m_ostream;
+};
 
 #endif

@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include <streambuf>
+#include <iostream>
 
 #include "common.h"
 #include "console.h"
