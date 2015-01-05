@@ -81,25 +81,27 @@ string Console::get_input_line()
                     --m_currentInputLinePos;
                     m_inputLines[m_currentInputLineIdx].erase(m_currentInputLinePos, 1);
                     advance_cursor_pos(-1);
-                    if (m_currentInputLinePos == m_inputLines[m_currentInputLineIdx].size())
-                    {
-                        echo_char(L' ');
-                        advance_cursor_pos(-1);
-                    }
-                    else
-                    {
-                        auto str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
-                        echo_string(str);
-                        echo_char(L' ');
-                        advance_cursor_pos(-1 - static_cast<int>(str.size()));
-                    }
+                    wstring str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
+                    echo_string(str);
+                    echo_char(L' ');
+                    advance_cursor_pos(-1 - static_cast<int>(str.size()));
+                }
+                break;
+            case Input::Special::Delete:
+                if (m_currentInputLinePos < m_inputLines[m_currentInputLineIdx].size())
+                {
+                    m_inputLines[m_currentInputLineIdx].erase(m_currentInputLinePos, 1);
+                    wstring str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
+                    echo_string(str);
+                    echo_char(L' ');
+                    advance_cursor_pos(-1 - static_cast<int>(str.size()));
                 }
                 break;
             default:
                 throw new exception();
             }
         }
-        else // (c.type == Input::Type::Unicode)
+        else // (c.type == Input::Type::Character)
         {
             echo_char(c.character);
             m_inputLines[m_currentInputLineIdx].insert(m_currentInputLinePos, 1, c.character);

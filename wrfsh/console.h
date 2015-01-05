@@ -40,6 +40,7 @@ public:
             Up = 0x26,
             Right = 0x27,
             Down = 0x28,
+            Delete = 0x2e,
         };
 
         Type type;

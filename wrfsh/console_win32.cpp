@@ -174,20 +174,28 @@ Console::Input Console_Win32::get_input_char()
                 continue;
             }
 
-            switch (rec.uChar.UnicodeChar)
+            switch (rec.wVirtualKeyCode)
             {
-            case L'\r':
-            case L'\n':
-            case L'\b':
+            case VK_UP:
+            case VK_DOWN:
+            case VK_LEFT:
+            case VK_RIGHT:
+            case VK_DELETE:
+            case VK_BACK:
+            case VK_RETURN:
                 console_input.type = Input::Type::Special;
                 console_input.special = static_cast<Input::Special>(rec.wVirtualKeyCode);
                 break;
-            case L'\0':
+
+            case VK_SHIFT:
+            case VK_MENU:   // alt
                 continue;
+
             default:
+                if (rec.uChar.UnicodeChar == L'\0')
+                    continue;
                 console_input.type = Input::Type::Character;
                 console_input.character = rec.uChar.UnicodeChar;
-                break;
             }
 
             return console_input;
