@@ -81,7 +81,7 @@ string Console::get_input_line()
                     --m_currentInputLinePos;
                     m_inputLines[m_currentInputLineIdx].erase(m_currentInputLinePos, 1);
                     advance_cursor_pos(-1);
-                    wstring str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
+                    native_string_t str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
                     echo_string(str);
                     echo_char(L' ');
                     advance_cursor_pos(-1 - static_cast<int>(str.size()));
@@ -91,7 +91,7 @@ string Console::get_input_line()
                 if (m_currentInputLinePos < m_inputLines[m_currentInputLineIdx].size())
                 {
                     m_inputLines[m_currentInputLineIdx].erase(m_currentInputLinePos, 1);
-                    wstring str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
+                    native_string_t str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
                     echo_string(str);
                     echo_char(L' ');
                     advance_cursor_pos(-1 - static_cast<int>(str.size()));
