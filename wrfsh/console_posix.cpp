@@ -131,8 +131,8 @@ Console::Input Console_Posix::get_input_char()
 
 void SetColor(Console::CharAttr attrs)
 {
-    if (attrs == Console::CharAttr::None)
-        return;
+    if (attrs == Console::CharAttr::Default)
+        return; // don't bother
 
     char fg[] = "3x";
     char bg[] = "4x";
@@ -162,13 +162,6 @@ void SetColor(Console::CharAttr attrs)
     case 0x70: bg[1] = '7'; break; // red + green + blue = white
     }
 
-    // Note: special case: black on black is not possible; it means "default" instead.
-    if (fg[1] == '0' && bg[1] == '0')
-    {
-        fg[1] = 'x';
-        bg[1] = 'x';
-    }
-
     if ((attrs & Console::CharAttr::FG_Bold) != Console::CharAttr::None)
         extra.append(";1");
     if ((attrs & Console::CharAttr::BG_Bold) != Console::CharAttr::None)
@@ -178,28 +171,8 @@ void SetColor(Console::CharAttr attrs)
     if ((attrs & Console::CharAttr::Underline) != Console::CharAttr::None)
         extra.append(";4");
 
-    string code = "\033[";
-    if (fg[1] != 'x')
-        code.append(fg);
-    if (bg[1] != 'x')
-    {
-        if (code.back() != '[')
-            code.push_back(';');
-        code.append(bg);
-    }
-    if (!extra.empty())
-    {
-        if (code.back() != '[')
-            code.append(extra);
-        else
-            code.append(extra.substr(1));
-    }
-
-    if (code.back() != '[')
-    {
-        code.push_back('m');
-        write(STDOUT_FILENO, code.c_str(), code.size());
-    }
+    string code = "\033[" + fg + ';' + bg + extra + 'm';
+    write(STDOUT_FILENO, code.c_str(), code.size());
 }
 
 void ResetColor()

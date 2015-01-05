@@ -102,8 +102,14 @@ void Console_Win32::get_window_info()
 
 void Console_Win32::echo_char(wchar_t c, WORD attrs)
 {
-    wstring str(1, c);
-    echo_string(str, attrs);
+    CHKERR(WriteConsoleW(m_outputHandle, &c, 1, nullptr, nullptr));
+
+    if (attrs != static_cast<WORD>(CharAttr::Default))
+    {
+        CHKERR(WriteConsoleOutputAttribute(m_outputHandle, &attrs, 1, m_cursorPos, nullptr));
+    }
+
+    get_window_info();
 }
 
 void Console_Win32::echo_string(const wstring& s, WORD attrs)
@@ -111,7 +117,7 @@ void Console_Win32::echo_string(const wstring& s, WORD attrs)
     DWORD num_written = 0;
     CHKERR(WriteConsoleW(m_outputHandle, s.c_str(), static_cast<DWORD>(s.length()), &num_written, nullptr));
 
-    if (attrs != 0)
+    if (attrs != static_cast<int>(CharAttr::Default))
     {
         vector<WORD> buf;
         buf.resize(s.size(), attrs);
@@ -206,132 +212,6 @@ Console::Input Console_Win32::get_input_char()
         }
     } // for (;;)
 }
-
-#if 0
-string Console_Win32::get_input()
-{
-    new_empty_line();
-
-    for (;;)
-    {
-        INPUT_RECORD input;
-        DWORD records_read = 0;
-        CHKERR(ReadConsoleInputW(m_inputHandle, &input, 1, &records_read));
-
-        if (input.EventType == KEY_EVENT)
-        {
-            KEY_EVENT_RECORD& rec = input.Event.KeyEvent;
-
-            if (rec.uChar.UnicodeChar == L'\b')
-            {
-                if (rec.bKeyDown && m_currentInputLinePos > 0)
-                {
-                    m_currentInputLinePos--;
-                    m_inputLines[m_currentInputLineIdx].erase(m_currentInputLinePos, 1);
-                    advance_cursor_pos(-1);
-                    if (m_currentInputLinePos == m_inputLines[m_currentInputLineIdx].size())
-                    {
-                        echo_char(L' ');
-                        advance_cursor_pos(-1);
-                    }
-                    else
-                    {
-                        auto str = m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos);
-                        echo_string(str);
-                        echo_char(L' ');
-                        advance_cursor_pos(-1 - static_cast<int>(str.size()));
-                    }
-                }
-                continue;
-            }
-
-            if (rec.bKeyDown)
-            {
-                switch (rec.wVirtualKeyCode)
-                {
-                case VK_DOWN:
-                    if (m_currentInputLineIdx < m_inputLines.size() - 1)
-                    {
-                        replace_current_line(m_currentInputLineIdx + 1);
-                        m_currentInputLinePos = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
-                    }
-                    break;
-                case VK_UP:
-                    if (m_currentInputLineIdx > 0)
-                    {
-                        replace_current_line(m_currentInputLineIdx - 1);
-                        m_currentInputLinePos = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
-                    }
-                    break;
-                case VK_LEFT:
-                    if (!m_inputLines[m_currentInputLineIdx].empty()
-                        && m_currentInputLinePos > 0)
-                    {
-                        advance_cursor_pos(-1);
-                        m_currentInputLinePos--;
-                    }
-                    break;
-                case VK_RIGHT:
-                    if (m_inputLines[m_currentInputLineIdx].size() > m_currentInputLinePos)
-                    {
-                        advance_cursor_pos(1);
-                        m_currentInputLinePos++;
-                    }
-                    break;
-                }
-            }
-
-            if ((rec.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0)
-            {
-                // Don't process ctrl-key events.
-                continue;
-            }
-
-            if (rec.uChar.UnicodeChar != L'\0')
-            {
-                // Basic characters
-
-                if (rec.uChar.UnicodeChar == '\r')
-                    rec.uChar.UnicodeChar = '\n';
-
-                if (rec.bKeyDown/* || !m_lastKeyInputDown*/)
-                {
-                    echo_char(rec.uChar.UnicodeChar);
-                    if (rec.wVirtualKeyCode != VK_RETURN)
-                    {
-                        m_inputLines[m_currentInputLineIdx].insert(m_currentInputLinePos, 1, rec.uChar.UnicodeChar);
-                        m_currentInputLinePos++;
-                        if (m_currentInputLinePos < m_inputLines[m_currentInputLineIdx].size())
-                        {
-                            // Echo the rest of the line because we inserted
-                            // in the middle of the line.
-                            echo_string(m_inputLines[m_currentInputLineIdx].substr(m_currentInputLinePos));
-                            advance_cursor_pos(static_cast<int>(m_currentInputLinePos) - static_cast<int>(m_inputLines[m_currentInputLineIdx].size()));
-                        }
-                    }
-                    m_lastKeyInputDown = true;
-                }
-
-                if (!rec.bKeyDown)
-                {
-                    m_lastKeyInputDown = false;
-
-                    if (rec.wVirtualKeyCode == VK_RETURN)
-                    {
-                        m_currentInputLinePos = 0;
-                        return Narrow(m_inputLines[m_currentInputLineIdx]);
-                    }
-
-                }
-            }
-        }
-        else if (input.EventType == WINDOW_BUFFER_SIZE_EVENT)
-        {
-            m_windowSize = input.Event.WindowBufferSizeEvent.dwSize;
-        }
-    }
-}
-#endif
 
 void Console_Win32::write_output(const string& s, CharAttr attrs)
 {

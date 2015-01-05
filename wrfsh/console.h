@@ -5,7 +5,7 @@ class Console
 public:
     enum class CharAttr
     {
-        None = 0,
+        Default = 0x70,
 
         FG_Blue = 0x1,
         FG_Green = 0x2,
@@ -58,7 +58,7 @@ public:
     void prompt();
 
     virtual Input get_input_char() = 0;
-    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None) = 0;
+    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::Default) = 0;
     virtual std::ostream& ostream() = 0;
     virtual void advance_cursor_pos(int n) = 0;
 
@@ -67,8 +67,8 @@ protected:
     void replace_current_line(int newIndex);
     void clear_current_display_line();
 
-    virtual void echo_char(native_string_t::value_type c, CharAttr attrs = CharAttr::None) = 0;
-    virtual void echo_string(const native_string_t& s, CharAttr attrs = CharAttr::None) = 0;
+    virtual void echo_char(native_string_t::value_type c, CharAttr attrs = CharAttr::Default) = 0;
+    virtual void echo_string(const native_string_t& s, CharAttr attrs = CharAttr::Default) = 0;
 
     std::vector<native_string_t> m_inputLines;
     size_t m_currentInputLineIdx;
@@ -131,23 +131,23 @@ public:
     ~Console_Win32();
 
     virtual Console::Input get_input_char();
-    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None);
+    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::Default);
     virtual std::ostream& ostream();
     virtual void advance_cursor_pos(int n);
 
 protected:
-    virtual void echo_char(wchar_t c, CharAttr attrs = CharAttr::None)
+    virtual void echo_char(wchar_t c, CharAttr attrs = CharAttr::Default)
     {
         echo_char(c, static_cast<WORD>(attrs));
     }
-    virtual void echo_string(const std::wstring& s, CharAttr attrs = CharAttr::None)
+    virtual void echo_string(const std::wstring& s, CharAttr attrs = CharAttr::Default)
     {
         echo_string(s, static_cast<WORD>(attrs));
     }
 
 private:
-    void echo_char(wchar_t c, WORD attrs = 0);
-    void echo_string(const std::wstring& s, WORD attrs = 0);
+    void echo_char(wchar_t c, WORD attrs = static_cast<WORD>(CharAttr::Default));
+    void echo_string(const std::wstring& s, WORD attrs = static_cast<WORD>(CharAttr::Default));
     void get_window_info();
 
     static BOOL WINAPI ctrl_handler(DWORD dwCtrlType);
