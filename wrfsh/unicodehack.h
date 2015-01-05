@@ -141,16 +141,16 @@ inline std::string Narrow(std::wstring utf16)
 // This is awesome because path::string_type is automatically correct for the
 // target OS.
 #include <filesystem>
-typedef std::tr2::sys::path::string_type path_t;
-inline path_t ospath(std::string s)
+typedef std::tr2::sys::path::string_type native_string_t;
+inline native_string_t ospath(std::string s)
 {
     return std::tr2::sys::u8path(s).native();
 }
 
-#else // Dev14
+#else // Dev12
 
-typedef std::wstring path_t;
-inline path_t ospath(std::string s)
+typedef std::wstring native_string_t;
+inline native_string_t ospath(std::string s)
 {
     return Widen(s);
 }
@@ -162,7 +162,7 @@ inline path_t ospath(std::string s)
 // Assuming Posix
 
 #include <string>
-typedef std::string path_t;
+typedef std::string native_string_t;
 
 /*
 path_t ospath(std::string s)
@@ -170,6 +170,8 @@ path_t ospath(std::string s)
 return s;
 }
 */
-#define ospath(_s) ((path_t)(_s))
+#define ospath(_s) ((native_string_t)(_s))
+
+#define Narrow(_s) (_s)
 
 #endif

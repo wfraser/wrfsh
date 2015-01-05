@@ -13,6 +13,8 @@
 
 #include <unistd.h>
 
+#define countof(_) (sizeof(_) / sizeof(*_))
+
 #endif
 
 #ifdef __CYGWIN__

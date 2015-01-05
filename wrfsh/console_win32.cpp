@@ -148,34 +148,58 @@ void Console_Win32::advance_cursor_pos(int n)
     CHKERR(SetConsoleCursorPosition(m_outputHandle, m_cursorPos));
 }
 
-void Console_Win32::replace_current_line(int newIndex)
+Console::Input Console_Win32::get_input_char()
 {
-    clear_current_display_line();
+    Input console_input = {};
 
-    m_currentInputLineIdx = newIndex;
-    echo_string(m_inputLines[m_currentInputLineIdx]);
-    m_currentInputLinePos = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
-}
-
-void Console_Win32::new_empty_line()
-{
-    if (m_inputLines.empty() || !m_inputLines.back().empty())
+    for (;;)
     {
-        m_inputLines.push_back(L"");
-    }
-    replace_current_line(static_cast<int>(m_inputLines.size()) - 1);
+        INPUT_RECORD input;
+        DWORD records_read = 0;
+        CHKERR(ReadConsoleInputW(m_inputHandle, &input, 1, &records_read));
+
+        if (input.EventType == KEY_EVENT)
+        {
+            KEY_EVENT_RECORD& rec = input.Event.KeyEvent;
+            
+            if ((rec.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0)
+            {
+                // Don't process ctrl-key events.
+                continue;
+            }
+
+            if (!rec.bKeyDown)
+            {
+                // Don't process key-up events; only key-down events;
+                continue;
+            }
+
+            switch (rec.uChar.UnicodeChar)
+            {
+            case L'\r':
+            case L'\n':
+            case L'\b':
+                console_input.type = Input::Type::Special;
+                console_input.special = static_cast<Input::Special>(rec.wVirtualKeyCode);
+                break;
+            case L'\0':
+                continue;
+            default:
+                console_input.type = Input::Type::Character;
+                console_input.character = rec.uChar.UnicodeChar;
+                break;
+            }
+
+            return console_input;
+        }
+        else if (input.EventType == WINDOW_BUFFER_SIZE_EVENT)
+        {
+            m_windowSize = input.Event.WindowBufferSizeEvent.dwSize;
+        }
+    } // for (;;)
 }
 
-void Console_Win32::clear_current_display_line()
-{
-    int currentLineLen = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
-
-    advance_cursor_pos(-1 * m_currentInputLinePos);
-    echo_string(wstring(currentLineLen, L' '));
-    advance_cursor_pos(-1 * currentLineLen);
-    m_currentInputLinePos = 0;
-}
-
+#if 0
 string Console_Win32::get_input()
 {
     new_empty_line();
@@ -299,6 +323,7 @@ string Console_Win32::get_input()
         }
     }
 }
+#endif
 
 void Console_Win32::write_output(const string& s, CharAttr attrs)
 {

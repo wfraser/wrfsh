@@ -21,14 +21,57 @@ public:
         Underline = 0x8000,
     };
 
-    static Console* make();
+    struct Input
+    {
+        enum class Type
+        {
+            Character = 0,
+            Special = 1,
+        };
 
-    virtual std::string get_input() = 0;
+        // These values are the same as the VK_* codes in Win32.
+        enum class Special
+        {
+            Eof = 0x0,
+            Backspace = 0x08,
+            Tab = 0x09,
+            Return = 0x0d,
+            Left = 0x25,
+            Up = 0x26,
+            Right = 0x27,
+            Down = 0x28,
+        };
+
+        Type type;
+        union
+        {
+            native_string_t::value_type character;
+            Special special;
+        };
+    };
+
+    static Console* make();
+    virtual ~Console();
+
+    std::string get_input_line();
+    void prompt();
+
+    virtual Input get_input_char() = 0;
     virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None) = 0;
     virtual std::ostream& ostream() = 0;
     virtual void advance_cursor_pos(int n) = 0;
 
-    void prompt();
+protected:
+    void new_empty_line();
+    void replace_current_line(int newIndex);
+    void clear_current_display_line();
+
+    virtual void echo_char(native_string_t::value_type c, CharAttr attrs = CharAttr::None) = 0;
+    virtual void echo_string(const native_string_t& s, CharAttr attrs = CharAttr::None) = 0;
+
+    std::vector<native_string_t> m_inputLines;
+    size_t m_currentInputLineIdx;
+    size_t m_currentInputLinePos;
 };
 
 inline Console::CharAttr operator|(Console::CharAttr x, Console::CharAttr y)
@@ -79,27 +122,30 @@ public:
     Console_Win32();
     ~Console_Win32();
 
-    virtual std::string get_input();
+    virtual Console::Input get_input_char();
     virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None);
     virtual std::ostream& ostream();
     virtual void advance_cursor_pos(int n);
 
+protected:
+    virtual void echo_char(wchar_t c, CharAttr attrs = CharAttr::None)
+    {
+        echo_char(c, static_cast<WORD>(attrs));
+    }
+    virtual void echo_string(const std::wstring& s, CharAttr attrs = CharAttr::None)
+    {
+        echo_string(s, static_cast<WORD>(attrs));
+    }
+
 private:
-    void get_window_info();
     void echo_char(wchar_t c, WORD attrs = 0);
     void echo_string(const std::wstring& s, WORD attrs = 0);
-    void new_empty_line();
-    void replace_current_line(int newIndex);
-    void clear_current_display_line();
+    void get_window_info();
 
     static BOOL WINAPI ctrl_handler(DWORD dwCtrlType);
 
     HANDLE m_inputHandle;
     HANDLE m_outputHandle;
-    std::vector<std::wstring> m_inputLines;
-    int m_currentInputLineIdx;
-    int m_currentInputLinePos;
-
     COORD m_cursorPos;
     COORD m_windowSize;
 
@@ -119,14 +165,23 @@ public:
     Console_Posix();
     ~Console_Posix();
 
-    virtual std::string get_input();
+    virtual Console::Input get_input_char();
     virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None);
     virtual std::ostream& ostream();
     virtual void advance_cursor_pos(int n);
 
+protected:
+    virtual void echo_char(char c, CharAttr attrs = CharAttr::None);
+    virtual void echo_string(const std::string& s, CharAttr attrs = CharAttr::None);
+
 private:
+    bool vt_escape(Console::Input* input);
+
     std::unique_ptr<Console_streambuf> m_streambuf;
     std::ostream m_ostream;
+
+    struct Details;
+    Details* m_details;
 };
 
 #endif

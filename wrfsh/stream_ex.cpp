@@ -31,7 +31,7 @@ stream_ex::stream_ex(native_handle handle, std::ios_base::openmode mode)
     open_native_handle(mode);
 }
 
-stream_ex::stream_ex(path_t path, std::ios_base::openmode mode)
+stream_ex::stream_ex(native_string_t path, std::ios_base::openmode mode)
     : m_kind(kind::Native)
     , m_stream(nullptr)
 #ifdef _MSC_VER
@@ -211,7 +211,7 @@ istream_ex::istream_ex(native_handle handle)
 {
 }
 
-istream_ex::istream_ex(path_t path)
+istream_ex::istream_ex(native_string_t path)
     : stream_ex(path, std::ios_base::in)
     , std::istream(m_stream->rdbuf())
 {
@@ -229,7 +229,7 @@ ostream_ex::ostream_ex(native_handle handle)
 {
 }
 
-ostream_ex::ostream_ex(path_t path)
+ostream_ex::ostream_ex(native_string_t path)
     : stream_ex(path, std::ios_base::out)
     , std::ostream(m_stream->rdbuf())
 {

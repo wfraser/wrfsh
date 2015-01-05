@@ -45,7 +45,7 @@ int real_main(int argc, char *argv[], char *envp[])
             while (!gs.exit)
             {
                 con->prompt();
-                string line = con->get_input();
+                string line = con->get_input_line();
                 in.clear();
                 buffer << line;
                 exitCode = repl(in, con->ostream(), con->ostream(), gs, cin);

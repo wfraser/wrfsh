@@ -28,7 +28,7 @@ protected:
 
     stream_ex(std::ios* stream);
     stream_ex(native_handle handle, std::ios_base::openmode mode);
-    stream_ex(path_t path, std::ios_base::openmode mode);
+    stream_ex(native_string_t path, std::ios_base::openmode mode);
 
     kind m_kind;
     std::ios* m_stream;
@@ -47,7 +47,7 @@ class istream_ex : public stream_ex, public std::istream
 public:
     istream_ex(std::istream* stream);
     istream_ex(native_handle handle);
-    istream_ex(path_t path);
+    istream_ex(native_string_t path);
 };
 
 class ostream_ex : public stream_ex, public std::ostream
@@ -55,5 +55,5 @@ class ostream_ex : public stream_ex, public std::ostream
 public:
     ostream_ex(std::ostream* stream);
     ostream_ex(native_handle handle);
-    ostream_ex(path_t path);
+    ostream_ex(native_string_t path);
 };
