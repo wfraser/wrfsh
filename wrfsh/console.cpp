@@ -26,7 +26,8 @@ Console::~Console()
 
 void Console::prompt()
 {
-    write_output("wrfsh> ", CharAttr::FG_Green | CharAttr::FG_Bold);
+    write_output("wrfsh", CharAttr::FG_Green | CharAttr::Underline);
+    write_output("> ", CharAttr::FG_Green | CharAttr::FG_Bold);
 }
 
 string Console::get_input_line()

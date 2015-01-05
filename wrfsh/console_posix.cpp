@@ -118,7 +118,6 @@ Console::Input Console_Posix::get_input_char()
                     continue;
                 break;
             case 127: // ASCII DEL
-                printf("backspace\n");
                 input.special = Input::Special::Backspace;
                 break;
             default:
@@ -130,16 +129,99 @@ Console::Input Console_Posix::get_input_char()
     }
 }
 
-void Console_Posix::echo_char(char c, Console::CharAttr)
+void SetColor(Console::CharAttr attrs)
 {
+    if (attrs == Console::CharAttr::None)
+        return;
+
+    char fg[] = "3x";
+    char bg[] = "4x";
+    string extra;
+
+    switch (static_cast<int>(attrs) & 0x7)
+    {
+    case 0: fg[1] = '0'; break; // black
+    case 1: fg[1] = '4'; break; // blue
+    case 2: fg[1] = '2'; break; // green
+    case 3: fg[1] = '6'; break; // blue + green = cyan
+    case 4: fg[1] = '1'; break; // red
+    case 5: fg[1] = '5'; break; // red + blue = magenta
+    case 6: fg[1] = '3'; break; // red + green = yellow
+    case 7: fg[1] = '7'; break; // red + green + blue = white
+    }
+
+    switch (static_cast<int>(attrs) & 0x70)
+    {
+    case 0x00: bg[1] = '0'; break; // black
+    case 0x10: bg[1] = '4'; break; // blue
+    case 0x20: bg[1] = '2'; break; // green
+    case 0x30: bg[1] = '6'; break; // blue + green = cyan
+    case 0x40: bg[1] = '1'; break; // red
+    case 0x50: bg[1] = '5'; break; // red + blue = magenta
+    case 0x60: bg[1] = '3'; break; // red + green = yellow
+    case 0x70: bg[1] = '7'; break; // red + green + blue = white
+    }
+
+    // Note: special case: black on black is not possible; it means "default" instead.
+    if (fg[1] == '0' && bg[1] == '0')
+    {
+        fg[1] = 'x';
+        bg[1] = 'x';
+    }
+
+    if ((attrs & Console::CharAttr::FG_Bold) != Console::CharAttr::None)
+        extra.append(";1");
+    if ((attrs & Console::CharAttr::BG_Bold) != Console::CharAttr::None)
+        extra.append(";2");
+    if ((attrs & Console::CharAttr::Reverse) != Console::CharAttr::None)
+        extra.append(";7");
+    if ((attrs & Console::CharAttr::Underline) != Console::CharAttr::None)
+        extra.append(";4");
+
+    string code = "\033[";
+    if (fg[1] != 'x')
+        code.append(fg);
+    if (bg[1] != 'x')
+    {
+        if (code.back() != '[')
+            code.push_back(';');
+        code.append(bg);
+    }
+    if (!extra.empty())
+    {
+        if (code.back() != '[')
+            code.append(extra);
+        else
+            code.append(extra.substr(1));
+    }
+
+    if (code.back() != '[')
+    {
+        code.push_back('m');
+        write(STDOUT_FILENO, code.c_str(), code.size());
+    }
+}
+
+void ResetColor()
+{
+    const char str [] = "\033[0m";
+    write(STDOUT_FILENO, str, countof(str) - 1);
+}
+
+void Console_Posix::echo_char(char c, Console::CharAttr attrs)
+{
+    SetColor(attrs);
     ssize_t n = write(STDOUT_FILENO, &c, 1);
     if (n != 1)
         perror("echo_char write");
+    ResetColor();
 }
 
-void Console_Posix::echo_string(const string& s, Console::CharAttr)
+void Console_Posix::echo_string(const string& s, Console::CharAttr attrs)
 {
+    SetColor(attrs);
     ssize_t n = write(STDOUT_FILENO, s.c_str(), s.size());
     if (n != static_cast<ssize_t>(s.size()))
         perror("echo_string write");
+    ResetColor();
 }

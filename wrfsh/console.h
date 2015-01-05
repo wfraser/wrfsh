@@ -82,6 +82,13 @@ inline Console::CharAttr operator|(Console::CharAttr x, Console::CharAttr y)
         );
 }
 
+inline Console::CharAttr operator&(Console::CharAttr x, Console::CharAttr y)
+{
+    return static_cast<Console::CharAttr>(
+        static_cast<unsigned int>(x) & static_cast<unsigned int>(y)
+        );
+}
+
 class Console_streambuf : public std::streambuf
 {
 public:
