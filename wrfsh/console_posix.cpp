@@ -134,50 +134,50 @@ void SetColor(Console::CharAttr attrs)
     if (attrs == Console::CharAttr::Default)
         return; // don't bother
 
-    char fg[] = "3x";
-    char bg[] = "4x";
-    string extra;
+    string code = "\033[3x;4x";
+    const size_t fgPos = 3;
+    const size_t bgPos = 6;
 
     switch (static_cast<int>(attrs) & 0x7)
     {
-    case 0: fg[1] = '0'; break; // black
-    case 1: fg[1] = '4'; break; // blue
-    case 2: fg[1] = '2'; break; // green
-    case 3: fg[1] = '6'; break; // blue + green = cyan
-    case 4: fg[1] = '1'; break; // red
-    case 5: fg[1] = '5'; break; // red + blue = magenta
-    case 6: fg[1] = '3'; break; // red + green = yellow
-    case 7: fg[1] = '7'; break; // red + green + blue = white
+    case 0: code[fgPos] = '0'; break; // black
+    case 1: code[fgPos] = '4'; break; // blue
+    case 2: code[fgPos] = '2'; break; // green
+    case 3: code[fgPos] = '6'; break; // blue + green = cyan
+    case 4: code[fgPos] = '1'; break; // red
+    case 5: code[fgPos] = '5'; break; // red + blue = magenta
+    case 6: code[fgPos] = '3'; break; // red + green = yellow
+    case 7: code[fgPos] = '7'; break; // red + green + blue = white
     }
 
     switch (static_cast<int>(attrs) & 0x70)
     {
-    case 0x00: bg[1] = '0'; break; // black
-    case 0x10: bg[1] = '4'; break; // blue
-    case 0x20: bg[1] = '2'; break; // green
-    case 0x30: bg[1] = '6'; break; // blue + green = cyan
-    case 0x40: bg[1] = '1'; break; // red
-    case 0x50: bg[1] = '5'; break; // red + blue = magenta
-    case 0x60: bg[1] = '3'; break; // red + green = yellow
-    case 0x70: bg[1] = '7'; break; // red + green + blue = white
+    case 0x00: code[bgPos] = '0'; break; // black
+    case 0x10: code[bgPos] = '4'; break; // blue
+    case 0x20: code[bgPos] = '2'; break; // green
+    case 0x30: code[bgPos] = '6'; break; // blue + green = cyan
+    case 0x40: code[bgPos] = '1'; break; // red
+    case 0x50: code[bgPos] = '5'; break; // red + blue = magenta
+    case 0x60: code[bgPos] = '3'; break; // red + green = yellow
+    case 0x70: code[bgPos] = '7'; break; // red + green + blue = white
     }
 
     if ((attrs & Console::CharAttr::FG_Bold) != Console::CharAttr::None)
-        extra.append(";1");
+        code.append(";1");
     if ((attrs & Console::CharAttr::BG_Bold) != Console::CharAttr::None)
-        extra.append(";2");
+        code.append(";2");
     if ((attrs & Console::CharAttr::Reverse) != Console::CharAttr::None)
-        extra.append(";7");
+        code.append(";7");
     if ((attrs & Console::CharAttr::Underline) != Console::CharAttr::None)
-        extra.append(";4");
+        code.append(";4");
 
-    string code = "\033[" + fg + ';' + bg + extra + 'm';
+    code.push_back('m');
     write(STDOUT_FILENO, code.c_str(), code.size());
 }
 
 void ResetColor()
 {
-    const char str [] = "\033[0m";
+    const char str[] = "\033[0m";
     write(STDOUT_FILENO, str, countof(str) - 1);
 }
 

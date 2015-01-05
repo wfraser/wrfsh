@@ -6,6 +6,7 @@ public:
     enum class CharAttr
     {
         Default = 0x70,
+        None = 0,       // Only use this for comparisons. This requests black-on-black text.
 
         FG_Blue = 0x1,
         FG_Green = 0x2,
@@ -174,13 +175,13 @@ public:
     ~Console_Posix();
 
     virtual Console::Input get_input_char();
-    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::None);
+    virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::Default);
     virtual std::ostream& ostream();
     virtual void advance_cursor_pos(int n);
 
 protected:
-    virtual void echo_char(char c, CharAttr attrs = CharAttr::None);
-    virtual void echo_string(const std::string& s, CharAttr attrs = CharAttr::None);
+    virtual void echo_char(char c, CharAttr attrs = CharAttr::Default);
+    virtual void echo_string(const std::string& s, CharAttr attrs = CharAttr::Default);
 
 private:
     bool vt_escape(Console::Input* input);
