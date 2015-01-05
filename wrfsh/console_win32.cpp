@@ -100,27 +100,29 @@ void Console_Win32::get_window_info()
     m_cursorPos = info.dwCursorPosition;
 }
 
-void Console_Win32::echo_char(wchar_t c, WORD attrs)
+void Console_Win32::echo_char(wchar_t c, CharAttr attrs)
 {
-    CHKERR(WriteConsoleW(m_outputHandle, &c, 1, nullptr, nullptr));
+    DWORD num_written;
+    CHKERR(WriteConsoleW(m_outputHandle, &c, 1, &num_written, nullptr));
 
-    if (attrs != static_cast<WORD>(CharAttr::Default))
+    if (attrs != CharAttr::Default)
     {
-        CHKERR(WriteConsoleOutputAttribute(m_outputHandle, &attrs, 1, m_cursorPos, nullptr));
+        WORD w = static_cast<WORD>(attrs);
+        CHKERR(WriteConsoleOutputAttribute(m_outputHandle, &w, 1, m_cursorPos, &num_written));
     }
 
     get_window_info();
 }
 
-void Console_Win32::echo_string(const wstring& s, WORD attrs)
+void Console_Win32::echo_string(const wstring& s, CharAttr attrs)
 {
     DWORD num_written = 0;
     CHKERR(WriteConsoleW(m_outputHandle, s.c_str(), static_cast<DWORD>(s.length()), &num_written, nullptr));
 
-    if (attrs != static_cast<int>(CharAttr::Default))
+    if (attrs != CharAttr::Default)
     {
         vector<WORD> buf;
-        buf.resize(s.size(), attrs);
+        buf.resize(s.size(), static_cast<WORD>(attrs));
         CHKERR(WriteConsoleOutputAttribute(m_outputHandle, buf.data(), num_written, m_cursorPos, &num_written));
     }
 
@@ -215,7 +217,7 @@ Console::Input Console_Win32::get_input_char()
 
 void Console_Win32::write_output(const string& s, CharAttr attrs)
 {
-    echo_string(Widen(s), static_cast<WORD>(attrs));
+    echo_string(Widen(s), attrs);
 }
 
 ostream& Console_Win32::ostream()

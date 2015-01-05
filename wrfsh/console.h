@@ -3,10 +3,10 @@
 class Console
 {
 public:
-    enum class CharAttr
+    enum class CharAttr : uint16_t
     {
-        Default = 0x70,
-        None = 0,       // Only use this for comparisons. This requests black-on-black text.
+        Default = 0x7,  // Light gray on black.
+        None = 0x0,     // Only use this for comparisons. This requests black-on-black text.
 
         FG_Blue = 0x1,
         FG_Green = 0x2,
@@ -137,18 +137,10 @@ public:
     virtual void advance_cursor_pos(int n);
 
 protected:
-    virtual void echo_char(wchar_t c, CharAttr attrs = CharAttr::Default)
-    {
-        echo_char(c, static_cast<WORD>(attrs));
-    }
-    virtual void echo_string(const std::wstring& s, CharAttr attrs = CharAttr::Default)
-    {
-        echo_string(s, static_cast<WORD>(attrs));
-    }
+    virtual void echo_char(wchar_t c, CharAttr attrs = CharAttr::Default);
+    virtual void echo_string(const std::wstring& s, CharAttr attrs = CharAttr::Default);
 
 private:
-    void echo_char(wchar_t c, WORD attrs = static_cast<WORD>(CharAttr::Default));
-    void echo_string(const std::wstring& s, WORD attrs = static_cast<WORD>(CharAttr::Default));
     void get_window_info();
 
     static BOOL WINAPI ctrl_handler(DWORD dwCtrlType);
