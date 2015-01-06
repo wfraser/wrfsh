@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <deque>
 #include <streambuf>
 #include <iostream>
 
@@ -18,6 +19,12 @@ Console* Console::make()
 #else
     return new Console_Posix();
 #endif
+}
+
+Console::Console()
+    : m_currentInputLineIdx(0)
+    , m_currentInputLinePos(0)
+{
 }
 
 Console::~Console()
@@ -137,7 +144,9 @@ void Console::replace_current_line(int newIndex)
 
 void Console::clear_current_display_line()
 {
-    int currentLineLen = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
+    int currentLineLen = 0;
+    if (!m_inputLines.empty())
+        currentLineLen = static_cast<int>(m_inputLines[m_currentInputLineIdx].size());
 
     advance_cursor_pos(-1 * static_cast<int>(m_currentInputLinePos));
     echo_string(native_string_t(currentLineLen, static_cast<native_string_t::value_type>(' ')));

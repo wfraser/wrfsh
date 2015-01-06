@@ -1,6 +1,7 @@
 #include "unicodehack.h"
 
 #include <vector>
+#include <deque>
 #include <iostream>
 #include <fstream>
 #include <unordered_map>

@@ -4,8 +4,9 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <deque>
 
-#include <termios.h>
+#include <termio.h>
 
 #include "common.h"
 #include "console.h"
@@ -15,6 +16,11 @@ using namespace std;
 struct Console_Posix::Details
 {
     termios savedTermios;
+    struct winsize winsize;
+    struct
+    {
+        int x, y;
+    } cursor;
 };
 
 Console_Posix::Console_Posix()
@@ -44,7 +50,6 @@ Console_Posix::~Console_Posix()
 
 void Console_Posix::write_output(const native_string_t& s, CharAttr attrs)
 {
-    //TODO
     echo_string(s, attrs);
 }
 
@@ -70,24 +75,90 @@ ostream& Console_Posix::ostream()
     return m_ostream;
 }
 
-bool Console_Posix::vt_escape(Console::Input* input)
+bool Console_Posix::vt_escape()
 {
-    char c;
+    Input input = {};
+    input.type = Input::Type::Special;
+
     string buf;
+
+    char c;
+    int arg[16] = {};
+    size_t arg_num = 0;
 
     for (;;)
     {
-        if (read(STDOUT_FILENO, &c, 1) < 1)
+        if (read(STDIN_FILENO, &c, 1) < 1)
         {
-            input->type = Input::Type::Special;
-            input->special = Input::Special::Eof;
+            input.special = Input::Special::Eof;
+            m_pendingInputs.push_back(input);
             return true;
         }
 
+        buf.push_back(c);
+
+        switch (c)
+        {
+        case '[':
+            break;
+
+        case 'A':
+            input.special = Input::Special::Up;
+            goto direction_key;
+        case 'B':
+            input.special = Input::Special::Down;
+            goto direction_key;
+        case 'C':
+            input.special = Input::Special::Right;
+            goto direction_key;
+        case 'D':
+            input.special = Input::Special::Left;
+            goto direction_key;
+        
+        direction_key:
+            if (arg[0] == 0)
+                arg[0] = 1;
+            for (int i = 0; i < arg[0]; i++)
+            {
+                m_pendingInputs.push_back(input);
+            }
+            return true;
+
+        case '~':
+            
+
+        case ';':
+            arg_num++;
+            if (arg_num == countof(arg))
+            {
+                printf("too many arguments to CSI sequence\n");
+                return false;
+            }
+            break;
+
+        default:
+            if (c >= '0' && c <= '9')
+            {
+                arg[arg_num] *= 10;
+                arg[arg_num] += (c - '0');
+            }
+            else
+            {
+                printf("bad escape: ");
+                for (size_t i = 0; i < buf.size(); i++)
+                {
+                    printf("%02x ", buf[i]);
+                }
+                printf("\n");
+                return false;
+            }
+            break;
+        }
+
         // TODO: handle VT100 escape codes for arrow keys
-        input->type = Input::Type::Character;
-        input->character = static_cast<char>(c);
-        return true;
+        //input->type = Input::Type::Character;
+        //input->character = static_cast<char>(c);
+        //return true;
     }
 }
 
@@ -96,8 +167,16 @@ Console::Input Console_Posix::get_input_char()
     for (;;)
     {
         Input input = {};
+
+        if (m_pendingInputs.size() > 0)
+        {
+            input = m_pendingInputs.front();
+            m_pendingInputs.pop_front();
+            return input;
+        }
+
         char c;
-        ssize_t num_read = read(STDOUT_FILENO, &c, 1);
+        ssize_t num_read = read(STDIN_FILENO, &c, 1);
         if (num_read <= 0 || c == 4 /* ASCII EOT */)
         {
             input.type = Input::Type::Special;
@@ -114,9 +193,8 @@ Console::Input Console_Posix::get_input_char()
                 input.special = Input::Special::Return;
                 break;
             case 27: // ASCII ESC
-                if (!vt_escape(&input))
-                    continue;
-                break;
+                vt_escape();
+                continue;
             case 127: // ASCII DEL
                 input.special = Input::Special::Backspace;
                 break;
@@ -197,4 +275,96 @@ void Console_Posix::echo_string(const string& s, Console::CharAttr attrs)
     if (n != static_cast<ssize_t>(s.size()))
         perror("echo_string write");
     ResetColor();
+}
+
+void Console_Posix::get_window_info()
+{
+    if (-1 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &(m_details->winsize)))
+    {
+        perror("ioctl(TIOGCWINSZ)");
+        abort();
+        return;
+    }
+
+    const char s[] = "\033[6n";
+    if (write(STDOUT_FILENO, s, countof(s) - 1) < static_cast<ssize_t>(countof(s) - 1))
+    {
+        perror("write DSR");
+        abort();
+        return;
+    }
+
+    enum class States
+    {
+        Esc,
+        Bracket,
+        Y,
+        X
+    };
+    States state = States::Esc;
+
+    int x = 0;
+    int y = 0;
+    char c;
+    for (size_t i = 0; i < 32; i++)
+    {
+        if (read(STDIN_FILENO, &c, 1) < 1)
+        {
+            printf("!0!");
+            abort();
+            break;
+        }
+     
+        switch (state)
+        {
+        case States::Esc:
+            if (c != '\033')
+            {
+                printf("1:%d!", c);
+                abort();
+                return;
+            }
+            else
+            {
+                state = States::Bracket;
+            }
+            break;
+        case States::Bracket:
+            if (c != '[')
+            {
+                printf("!2:%d!", c);
+                abort();
+                return;
+            }
+            else
+            {
+                state = States::Y;
+            }
+            break;
+        case States::Y:
+            if (c == ';')
+            {
+                m_details->cursor.y = y;
+                state = States::X;
+            }
+            else
+            {
+                y *= 10;
+                y += (c - '0');
+            }
+            break;
+        case States::X:
+            if (c == 'R')
+            {
+                m_details->cursor.x = x;
+                return;
+            }
+            else
+            {
+                x *= 10;
+                x += (c - '0');
+            }
+            break;
+        }
+    }
 }

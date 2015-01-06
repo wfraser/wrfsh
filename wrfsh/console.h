@@ -53,6 +53,7 @@ public:
     };
 
     static Console* make();
+    Console();
     virtual ~Console();
 
     std::string get_input_line();
@@ -176,10 +177,12 @@ protected:
     virtual void echo_string(const std::string& s, CharAttr attrs = CharAttr::Default);
 
 private:
-    bool vt_escape(Console::Input* input);
+    bool vt_escape();
+    void get_window_info();
 
     std::unique_ptr<Console_streambuf> m_streambuf;
     std::ostream m_ostream;
+    std::deque<Console::Input> m_pendingInputs;
 
     struct Details;
     Details* m_details;
