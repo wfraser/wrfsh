@@ -60,11 +60,8 @@ void Console_Posix::write_output(const native_string_t& s, CharAttr attrs)
 
 void Console_Posix::advance_cursor_pos(int n)
 {
-    fprintf(stderr, "screen size: %d,%d\n", m_details->screen.x, m_details->screen.y);
-    fprintf(stderr, "starting coords: %d,%d\n", m_details->cursor.x, m_details->cursor.y);
     int start_y = m_details->cursor.y;
     IncrementWrap<int>(m_details->cursor.x, m_details->cursor.y, n, m_details->screen.x);
-    fprintf(stderr, "ending coords: %d,%d\n", m_details->cursor.x, m_details->cursor.y);
 
     char str[32];
     char direction = 'C';
@@ -406,7 +403,7 @@ end:
     m_details->cursor.x = x - 1;
     m_details->cursor.y = y - 1;
 
-#if 1
+#if 0
     fprintf(stderr, "screen size: (%d,%d)\ncursor: (%d,%d)\n",
         m_details->screen.x,
         m_details->screen.y,
