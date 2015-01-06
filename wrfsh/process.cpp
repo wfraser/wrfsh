@@ -14,7 +14,8 @@ Process::Process(const string program, const vector<string> args) :
 {
 #ifdef _MSC_VER
     // Commands implemented by cmd.exe
-    if (m_program == "dir")
+    if (m_program == "dir"
+        || m_program == "type")
     {
         vector<string> new_args({ "/c", m_program });
         new_args.insert(new_args.end(), m_args.begin(), m_args.end());
