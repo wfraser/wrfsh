@@ -13,14 +13,17 @@
 
 using namespace std;
 
+struct Coord
+{
+    int x;
+    int y;
+};
+
 struct Console_Posix::Details
 {
     termios savedTermios;
-    struct winsize winsize;
-    struct
-    {
-        int x, y;
-    } cursor;
+    Coord cursor;
+    Coord screen;
 };
 
 Console_Posix::Console_Posix()
@@ -39,6 +42,8 @@ Console_Posix::Console_Posix()
     tp.c_oflag |= ONLCR|OPOST;
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &tp);
+
+    get_window_info();
 }
 
 Console_Posix::~Console_Posix()
@@ -55,6 +60,12 @@ void Console_Posix::write_output(const native_string_t& s, CharAttr attrs)
 
 void Console_Posix::advance_cursor_pos(int n)
 {
+    fprintf(stderr, "screen size: %d,%d\n", m_details->screen.x, m_details->screen.y);
+    fprintf(stderr, "starting coords: %d,%d\n", m_details->cursor.x, m_details->cursor.y);
+    int start_y = m_details->cursor.y;
+    IncrementWrap<int>(m_details->cursor.x, m_details->cursor.y, n, m_details->screen.x);
+    fprintf(stderr, "ending coords: %d,%d\n", m_details->cursor.x, m_details->cursor.y);
+
     char str[32];
     char direction = 'C';
     if (n < 0)
@@ -65,7 +76,18 @@ void Console_Posix::advance_cursor_pos(int n)
 
     if (n != 0)
     {
-        int num = snprintf(str, countof(str), "\033[%d%c", n, direction);
+        int num;
+
+        if (m_details->cursor.y >= start_y)
+        {
+            num = snprintf(str, countof(str), "\033[%d%c", n, direction);
+        }
+        else
+        {
+            // Need to back up to the previous line; this can't be done with move forward/backward.
+            // Use the "force cursor position" sequence instead.
+            num = snprintf(str, countof(str), "\033[%d;%df", m_details->cursor.y + 1, m_details->cursor.x + 1);
+        }
         write(STDOUT_FILENO, str, num);
     }
 }
@@ -124,9 +146,6 @@ bool Console_Posix::vt_escape()
             }
             return true;
 
-        case '~':
-            
-
         case ';':
             arg_num++;
             if (arg_num == countof(arg))
@@ -135,6 +154,9 @@ bool Console_Posix::vt_escape()
                 return false;
             }
             break;
+
+        case '~':
+            //TODO
 
         default:
             if (c >= '0' && c <= '9')
@@ -261,6 +283,7 @@ void ResetColor()
 
 void Console_Posix::echo_char(char c, Console::CharAttr attrs)
 {
+    IncrementWrap<int>(m_details->cursor.x, m_details->cursor.y, 1, m_details->screen.x);
     SetColor(attrs);
     ssize_t n = write(STDOUT_FILENO, &c, 1);
     if (n != 1)
@@ -270,6 +293,7 @@ void Console_Posix::echo_char(char c, Console::CharAttr attrs)
 
 void Console_Posix::echo_string(const string& s, Console::CharAttr attrs)
 {
+    IncrementWrap<int>(m_details->cursor.x, m_details->cursor.y, s.size(), m_details->screen.x);
     SetColor(attrs);
     ssize_t n = write(STDOUT_FILENO, s.c_str(), s.size());
     if (n != static_cast<ssize_t>(s.size()))
@@ -279,12 +303,16 @@ void Console_Posix::echo_string(const string& s, Console::CharAttr attrs)
 
 void Console_Posix::get_window_info()
 {
-    if (-1 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &(m_details->winsize)))
+    struct winsize size;
+    if (-1 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &size))
     {
         perror("ioctl(TIOGCWINSZ)");
         abort();
         return;
     }
+
+    m_details->screen.x = size.ws_col;
+    m_details->screen.y = size.ws_row;
 
     const char s[] = "\033[6n";
     if (write(STDOUT_FILENO, s, countof(s) - 1) < static_cast<ssize_t>(countof(s) - 1))
@@ -320,8 +348,7 @@ void Console_Posix::get_window_info()
         case States::Esc:
             if (c != '\033')
             {
-                printf("1:%d!", c);
-                abort();
+                printf("Error reading cursor position: expected 27, got %d!\n", c);
                 return;
             }
             else
@@ -332,8 +359,7 @@ void Console_Posix::get_window_info()
         case States::Bracket:
             if (c != '[')
             {
-                printf("!2:%d!", c);
-                abort();
+                printf("Error reading cursor position: expected 91, got %d!\n", c);
                 return;
             }
             else
@@ -344,11 +370,15 @@ void Console_Posix::get_window_info()
         case States::Y:
             if (c == ';')
             {
-                m_details->cursor.y = y;
                 state = States::X;
             }
             else
             {
+                if (c < '0' || c > '9')
+                {
+                    printf("Error reading cursor position Y: expected a %d-%d, got %d!", '0', '9', c);
+                    return;
+                }
                 y *= 10;
                 y += (c - '0');
             }
@@ -356,15 +386,31 @@ void Console_Posix::get_window_info()
         case States::X:
             if (c == 'R')
             {
-                m_details->cursor.x = x;
-                return;
+                goto end;
             }
             else
             {
+                if (c < '0' || c > '9')
+                {
+                    printf("Error reading cursor position X: expected a %d-%d, got %d!", '0', '9', c);
+                    return;
+                }
                 x *= 10;
                 x += (c - '0');
             }
             break;
         }
     }
+
+end:
+    m_details->cursor.x = x - 1;
+    m_details->cursor.y = y - 1;
+
+#if 1
+    fprintf(stderr, "screen size: (%d,%d)\ncursor: (%d,%d)\n",
+        m_details->screen.x,
+        m_details->screen.y,
+        m_details->cursor.x,
+        m_details->cursor.y);
+#endif
 }

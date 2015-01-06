@@ -124,6 +124,27 @@ private:
     Console* m_console;
 };
 
+template <typename T>
+void IncrementWrap(T& x, T& y, T n, T row_size)
+{
+    x += n;
+
+    T rows = x / row_size;
+    T remainder = x % row_size;
+
+    if ((rows != 0 || x < 0) && n < 0)
+    {
+        rows -= 1;
+        remainder = row_size + remainder;
+    }
+
+    if (rows != 0)
+    {
+        x = remainder;
+        y += rows;
+    }
+}
+
 #ifdef _MSC_VER
 
 class Console_Win32 : public Console

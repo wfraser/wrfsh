@@ -129,27 +129,6 @@ void Console_Win32::echo_string(const wstring& s, CharAttr attrs)
     get_window_info();
 }
 
-template <typename T>
-void IncrementWrap(T &x, T &y, T n, T row_size)
-{
-    x += n;
-
-    T rows = x / row_size;
-    T remainder = x % row_size;
-
-    if (rows != 0 && n < 0)
-    {
-        rows -= 1;
-        remainder = row_size + remainder;
-    }
-
-    if (rows != 0)
-    {
-        x = remainder;
-        y += rows;
-    }
-};
-
 void Console_Win32::advance_cursor_pos(int n)
 {
     IncrementWrap<SHORT>(m_cursorPos.X, m_cursorPos.Y, static_cast<SHORT>(n), m_windowSize.X);
