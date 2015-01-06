@@ -344,6 +344,10 @@ bool Process::Run_Win32(istream& in, ostream& out, ostream& err, int *pExitCode)
         }
     }
 
+    // Windows cmd.exe adds an extra newline after program output.
+    // We should too.
+    out << endl;
+
     DWORD exitCode;
     GetExitCodeProcess(hProcess, &exitCode);
     *pExitCode = (int)exitCode;
