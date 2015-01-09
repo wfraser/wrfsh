@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <functional>
 #include <sstream>
+#include <string.h>
 
 #include "common.h"
 #include "global_state.h"
@@ -198,6 +199,30 @@ int exit_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_stat
     return exitCode;
 }
 
+int cd_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
+{
+    switch (args.size())
+    {
+    case 0:
+        args.push_back(state.lookup_var("HOME"));
+        return cd_commandlet(in, out, err, state, args);
+
+    case 1:
+        //TODO
+        if (chdir(args[0].c_str()) != 0)
+        {
+            err << "cd: " << strerror(errno) << endl;
+            return errno;
+        }
+        return 0;
+
+    default:
+        err << "Syntax error: too many arguments to 'cd'. Only one optional argument is expected.\n";
+        state.error = true;
+        return -1;
+    }
+}
+
 #define DEFINE_COMMANDLET(name) { #name, name##_commandlet }
 
 unordered_map<string, commandlet_function> special_functions(
@@ -211,4 +236,5 @@ unordered_map<string, commandlet_function> special_functions(
     DEFINE_COMMANDLET(run),
     DEFINE_COMMANDLET(new),
     DEFINE_COMMANDLET(exit),
+    DEFINE_COMMANDLET(cd),
 });

@@ -25,6 +25,7 @@ COMMANDLET(if);
 COMMANDLET(else);
 COMMANDLET(endif);
 COMMANDLET(exit);
+COMMANDLET(cd);
 
 #undef COMMANDLET
 
