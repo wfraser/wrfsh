@@ -1,3 +1,5 @@
+#include "unicodehack.h"
+
 #include <iostream>
 #include <vector>
 #include <list>
@@ -208,12 +210,29 @@ int cd_commandlet(istream& in, ostream& out, ostream& err, global_state& state, 
         return cd_commandlet(in, out, err, state, args);
 
     case 1:
-        //TODO
+#ifdef _MSC_VER
+        if (SetCurrentDirectoryW(Widen(args[0]).c_str()) == 0)
+        {
+            wchar_t* buf = nullptr;
+            DWORD error = GetLastError();
+            FormatMessage(
+                FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+                nullptr,
+                error,
+                0,
+                reinterpret_cast<LPWSTR>(&buf),
+                0,
+                nullptr);
+            err << "cd: " << Narrow(buf) << endl;
+            return error;
+        }
+#else
         if (chdir(args[0].c_str()) != 0)
         {
             err << "cd: " << strerror(errno) << endl;
             return errno;
         }
+#endif
         return 0;
 
     default:
