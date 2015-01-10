@@ -213,23 +213,16 @@ int cd_commandlet(istream& in, ostream& out, ostream& err, global_state& state, 
 #ifdef _MSC_VER
         if (SetCurrentDirectoryW(Widen(args[0]).c_str()) == 0)
         {
-            wchar_t* buf = nullptr;
             DWORD error = GetLastError();
-            FormatMessage(
-                FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-                nullptr,
-                error,
-                0,
-                reinterpret_cast<LPWSTR>(&buf),
-                0,
-                nullptr);
-            err << "cd: " << Narrow(buf) << endl;
+            err << "cd: " << Narrow(_com_error(HRESULT_FROM_WIN32(error)).ErrorMessage()); // message includes newline
+            state.error = true;
             return error;
         }
 #else
         if (chdir(args[0].c_str()) != 0)
         {
             err << "cd: " << strerror(errno) << endl;
+            state.error = true;
             return errno;
         }
 #endif
@@ -241,6 +234,35 @@ int cd_commandlet(istream& in, ostream& out, ostream& err, global_state& state, 
         return -1;
     }
 }
+
+#ifdef _MSC_VER
+int pwd_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& state, vector<string>& args)
+{
+    if (args.size() != 0)
+    {
+        err << "Syntax error: 'pwd' expects no arguments.\n";
+        state.error = true;
+        return -1;
+    }
+
+    DWORD requiredSize = GetCurrentDirectoryW(0, nullptr);
+    auto buf = new wchar_t[requiredSize];
+
+    if (GetCurrentDirectoryW(requiredSize, buf) != (requiredSize - 1))
+    {
+        delete [] buf;
+        DWORD error = GetLastError();
+        err << "pwd: " << Narrow(_com_error(HRESULT_FROM_WIN32(error)).ErrorMessage());
+        state.error = true;
+        return error;
+    }
+
+    out << Narrow(buf) << endl;
+
+    delete [] buf;
+    return 0;
+}
+#endif
 
 #define DEFINE_COMMANDLET(name) { #name, name##_commandlet }
 
@@ -256,4 +278,8 @@ unordered_map<string, commandlet_function> special_functions(
     DEFINE_COMMANDLET(new),
     DEFINE_COMMANDLET(exit),
     DEFINE_COMMANDLET(cd),
+
+#ifdef _MSC_VER
+    DEFINE_COMMANDLET(pwd),
+#endif
 });

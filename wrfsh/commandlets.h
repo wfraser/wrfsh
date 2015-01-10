@@ -27,6 +27,10 @@ COMMANDLET(endif);
 COMMANDLET(exit);
 COMMANDLET(cd);
 
+#ifdef _MSC_VER
+COMMANDLET(pwd);
+#endif
+
 #undef COMMANDLET
 
 extern std::unordered_map<std::string, commandlet_function> special_functions;

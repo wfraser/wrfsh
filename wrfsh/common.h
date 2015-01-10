@@ -5,6 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <comdef.h>
 
 #define snprintf(buf, n, format, ...)  _snprintf_s(buf, n, n, format, __VA_ARGS__)
 

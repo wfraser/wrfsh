@@ -7,12 +7,7 @@
 #include <vector>
 #include <sstream>
 
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <comdef.h>
-#include <io.h>
-
+#include "common.h"
 #include "stream_ex.h"
 #include "process.h"
 
