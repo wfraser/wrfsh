@@ -159,6 +159,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="console.cpp" />
+    <ClCompile Include="console_posix.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="console_win32.cpp" />
     <ClCompile Include="global_state.cpp" />
     <ClCompile Include="if_else_endif.cpp" />
