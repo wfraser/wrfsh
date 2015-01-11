@@ -75,7 +75,7 @@ void Console_Posix::advance_cursor_pos(int n)
     {
         int num;
 
-        if (m_details->cursor.y >= start_y)
+        if (m_details->cursor.y == start_y)
         {
             num = snprintf(str, countof(str), "\033[%d%c", n, direction);
         }
@@ -281,6 +281,12 @@ void ResetColor()
 void Console_Posix::echo_char(char c, Console::CharAttr attrs)
 {
     IncrementWrap<int>(m_details->cursor.x, m_details->cursor.y, 1, m_details->screen.x);
+    if (m_details->cursor.y == m_details->screen.y)
+    {
+        // We hit the bottom of the screen and scrolled.
+        m_details->cursor.y--;
+    }
+
     SetColor(attrs);
     ssize_t n = write(STDOUT_FILENO, &c, 1);
     if (n != 1)
@@ -296,6 +302,12 @@ void Console_Posix::echo_string(const string& s, Console::CharAttr attrs)
     if (n != static_cast<ssize_t>(s.size()))
         perror("echo_string write");
     ResetColor();
+}
+
+void Console_Posix::ding()
+{
+    char bell = '\a';
+    write(STDOUT_FILENO, &bell, 1);
 }
 
 void Console_Posix::get_window_info()

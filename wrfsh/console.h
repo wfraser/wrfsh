@@ -63,6 +63,7 @@ public:
     virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::Default) = 0;
     virtual std::ostream& ostream() = 0;
     virtual void advance_cursor_pos(int n) = 0;
+    virtual void ding() = 0;
 
 protected:
     void new_empty_line();
@@ -157,6 +158,7 @@ public:
     virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::Default);
     virtual std::ostream& ostream();
     virtual void advance_cursor_pos(int n);
+    virtual void ding();
 
 protected:
     virtual void echo_char(wchar_t c, CharAttr attrs = CharAttr::Default);
@@ -192,6 +194,7 @@ public:
     virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::Default);
     virtual std::ostream& ostream();
     virtual void advance_cursor_pos(int n);
+    virtual void ding();
 
 protected:
     virtual void echo_char(char c, CharAttr attrs = CharAttr::Default);

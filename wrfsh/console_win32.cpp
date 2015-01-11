@@ -203,3 +203,10 @@ ostream& Console_Win32::ostream()
 {
     return m_ostream;
 }
+
+void Console_Win32::ding()
+{
+    wchar_t bell = L'\a';
+    DWORD num_written;
+    WriteConsoleW(m_outputHandle, &bell, 1, &num_written, nullptr);
+}
