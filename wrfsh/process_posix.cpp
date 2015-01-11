@@ -5,7 +5,9 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <deque>
 #include <typeinfo>
+#include <memory>
 
 #include <unistd.h>
 #include <sys/wait.h>
@@ -15,6 +17,7 @@
 #include <assert.h>
 
 #include "stream_ex.h"
+#include "console.h"
 #include "process.h"
 
 using namespace std;
@@ -139,10 +142,11 @@ bool Process::Run_Posix(istream& in, ostream& out, ostream& err, int *pExitCode)
         int stdFd)
     {
         auto str_ex = dynamic_cast<stream_ex*>(stream);
-        if ((str_ex == nullptr) ? (stream == stdStream)
+        if ((str_ex == nullptr) ? ((stream == stdStream)
+                                    || (dynamic_cast<Console_streambuf*>(stream->rdbuf()) != nullptr))
                                 : (*str_ex == *stdStream))
         {
-            // It's a standard stream, or a stream_ex wrapping a standard stream.
+            // It's a standard stream, or a stream_ex wrapping a standard stream, or a stream backed by the console.
             childFd = stdFd;
             childFd.LeaveOpen();
             threadFd = -1;
