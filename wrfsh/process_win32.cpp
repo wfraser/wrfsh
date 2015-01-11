@@ -6,9 +6,12 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <cstdint>
+#include <memory>
 
 #include "common.h"
 #include "stream_ex.h"
+#include "console.h"
 #include "process.h"
 
 using namespace std;
@@ -240,10 +243,11 @@ bool Process::Run_Win32(istream& in, ostream& out, ostream& err, int *pExitCode)
         )
     {
         auto str_ex = dynamic_cast<stream_ex*>(&stream);
-        if ((str_ex == nullptr) ? (&stream == &stdStream)
+        if ((str_ex == nullptr) ? ((&stream == &stdStream)
+                                    || (dynamic_cast<Console_streambuf*>(stream.rdbuf()) != nullptr))
                                 : (*str_ex == stdStream))
         {
-            // It's a standard stream, or a stream_ex wrapping a standard stream.
+            // It's a standard stream, or a stream_ex wrapping a standard stream, or a stream backed by the console.
             childHandle = GetStdHandle(handleName);
             childHandle.LeaveOpen();
             threadHandle = INVALID_HANDLE_VALUE;
@@ -296,11 +300,10 @@ bool Process::Run_Win32(istream& in, ostream& out, ostream& err, int *pExitCode)
     hOut.Close();
     hErr.Close();
 
+    vector<HANDLE> threads;
+    ManagedHandle hInThread, hOutThread, hErrThread;
     if (needs_io_thread)
     {
-        vector<HANDLE> threads;
-        ManagedHandle hInThread, hOutThread, hErrThread;
-
         if (hThreadIn != INVALID_HANDLE_VALUE)
         {
             IOThreadArgs inArgs = { addressof(hThreadIn), &in };
@@ -319,14 +322,17 @@ bool Process::Run_Win32(istream& in, ostream& out, ostream& err, int *pExitCode)
             hErrThread = CreateThread(nullptr, 0, ReadThreadProc, &errArgs, 0, nullptr);
             threads.push_back(hErrThread);
         }
+    }
 
-        if (WAIT_OBJECT_0 != WaitForSingleObject(hProcess, INFINITE))
-        {
-            _com_error error(HRESULT_FROM_WIN32(GetLastError()));
-            cerr << "failed to wait on child process: " << Narrow(error.ErrorMessage()) << endl;
-            return false;
-        }
+    if (WAIT_OBJECT_0 != WaitForSingleObject(hProcess, INFINITE))
+    {
+        _com_error error(HRESULT_FROM_WIN32(GetLastError()));
+        cerr << "failed to wait on child process: " << Narrow(error.ErrorMessage()) << endl;
+        return false;
+    }
 
+    if (needs_io_thread)
+    {
         // The input thread uses I/O that could block even after the process ends (i.e. waiting on terminal).
         // Cancel it so the thread can exit.
         CancelSynchronousIo(hInThread);
