@@ -278,6 +278,10 @@ int repl(istream& in, ostream& out, ostream& err, global_state& global_state, is
                 // Add a newline in case EOF came at the end of a line.
                 // We'll terminate at the end of this loop iteration.
                 c = '\n';
+
+                // if input ended in '\', end the escape and force the line to be entered.
+                if (escape)
+                    escape = false;
             }
 
             if (in_comment && c != '\n')
