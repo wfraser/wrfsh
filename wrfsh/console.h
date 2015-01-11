@@ -37,6 +37,8 @@ public:
             Backspace = 0x08,
             Tab = 0x09,
             Return = 0x0d,
+            End = 0x23,
+            Home = 0x24,
             Left = 0x25,
             Up = 0x26,
             Right = 0x27,

@@ -153,7 +153,33 @@ bool Console_Posix::vt_escape()
             break;
 
         case '~':
-            //TODO
+            switch (arg[0])
+            {
+            case 1:
+                input.special = Input::Special::Home;
+                break;
+            //case 2:
+            //    input.special = Input::Special::Insert;
+            //    break;
+            case 3:
+                input.special = Input::Special::Delete;
+                break;
+            case 4:
+                input.special = Input::Special::End;
+                break;
+            //case 5:
+            //    input.special = Input::Special::PageUp;
+            //    break;
+            //case 6:
+            //    input.special = Input::Special::PageDown;
+            //    break;
+            // 11-24: F keys
+            default:
+                ding();
+                return false;
+            }
+            m_pendingInputs.push_back(input);
+            return true;
 
         default:
             if (c >= '0' && c <= '9')
@@ -217,6 +243,11 @@ Console::Input Console_Posix::get_input_char()
             case 127: // ASCII DEL
                 input.special = Input::Special::Backspace;
                 break;
+            case 3: // ctrl-C
+                //TODO
+                //input.special = Input::Special::Kill;
+                ding();
+                continue;
             default:
                 input.type = Input::Type::Character;
                 input.character = static_cast<char>(c);

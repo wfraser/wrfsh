@@ -79,6 +79,17 @@ string Console::get_input_line()
                     ++m_currentInputLinePos;
                 }
                 break;
+            case Input::Special::Home:
+                advance_cursor_pos(-1*m_currentInputLinePos);
+                m_currentInputLinePos = 0;
+                break;
+            case Input::Special::End:
+                {
+                    size_t size = m_inputLines[m_currentInputLineIdx].size();
+                    advance_cursor_pos(size - m_currentInputLinePos);
+                    m_currentInputLinePos = size;
+                }
+                break;
             case Input::Special::Return:
                 m_currentInputLinePos = 0;
                 echo_char('\n');
@@ -104,6 +115,8 @@ string Console::get_input_line()
                     echo_char(L' ');
                     advance_cursor_pos(-1 - static_cast<int>(str.size()));
                 }
+                else
+                    ding();
                 break;
             default:
                 throw new exception();
