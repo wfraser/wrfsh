@@ -1,9 +1,12 @@
+#include <iostream>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <list>
+#include <sstream>
 
 #include "common.h"
+#include "process.h"
 #include "global_state.h"
 
 using namespace std;
@@ -19,8 +22,8 @@ global_state::global_state(int argc, const char * const argv [], const char * co
     }
 
     let("#", to_string(argc - 1));
-
     let("?", "0");
+    let(".", get_current_working_directory(cerr));
 
     for (size_t i = 0; env[i] != nullptr; i++)
     {
@@ -43,6 +46,34 @@ global_state::global_state(int argc, const char * const argv [], const char * co
         }
         environment.emplace(key, value);
     }
+
+
+#ifdef _MSC_VER
+    string user;
+    string domain = lookup_var("USERDOMAIN");
+    if (!domain.empty())
+    {
+        user = domain;
+        user.push_back('\\');
+    }
+    user.append(lookup_var("USERNAME"));
+    let("USER", user);
+
+    vector<string> empty_args;
+    Process hostname_process("hostname", empty_args);
+
+    stringstream hostname_in, hostname_out, hostname_err;
+    int exitCode;
+    if (hostname_process.Run(hostname_in, hostname_out, hostname_err, &exitCode))
+    {
+        string hostname = hostname_out.str();
+        let("HOSTNAME", hostname.substr(0, hostname.find_last_of('\r')));
+    }
+    else
+    {
+        let("HOSTNAME", "localhost");
+    }
+#endif
 }
 
 std::string global_state::lookup_var(string key)

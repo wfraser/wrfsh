@@ -1,5 +1,7 @@
 #pragma once
 
+class global_state;
+
 class Console
 {
 public:
@@ -59,7 +61,7 @@ public:
     virtual ~Console();
 
     std::string get_input_line();
-    void prompt();
+    void prompt(global_state& state);
 
     virtual Input get_input_char() = 0;
     virtual void write_output(const std::string& s, CharAttr attrs = CharAttr::Default) = 0;

@@ -201,41 +201,45 @@ int exit_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_stat
     return exitCode;
 }
 
-int cd_commandlet(istream& in, ostream& out, ostream& err, global_state& state, vector<string>& args)
+int cd_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_state& state, vector<string>& args)
 {
-    switch (args.size())
+    string new_cwd;
+    if (args.size() == 0)
+        new_cwd = state.lookup_var("HOME");
+    else if (args.size() == 1)
+        new_cwd = args[0];
+    else
     {
-    case 0:
-        args.push_back(state.lookup_var("HOME"));
-        return cd_commandlet(in, out, err, state, args);
-
-    case 1:
-#ifdef _MSC_VER
-        if (SetCurrentDirectoryW(Widen(args[0]).c_str()) == 0)
-        {
-            DWORD error = GetLastError();
-            err << "cd: " << Narrow(_com_error(HRESULT_FROM_WIN32(error)).ErrorMessage()); // message includes newline
-            state.error = true;
-            return error;
-        }
-#else
-        if (chdir(args[0].c_str()) != 0)
-        {
-            err << "cd: " << strerror(errno) << endl;
-            state.error = true;
-            return errno;
-        }
-#endif
-        return 0;
-
-    default:
         err << "Syntax error: too many arguments to 'cd'. Only one optional argument is expected.\n";
         state.error = true;
         return -1;
     }
-}
 
 #ifdef _MSC_VER
+    if (SetCurrentDirectoryW(Widen(new_cwd).c_str()) == 0)
+    {
+        DWORD error = GetLastError();
+        err << "cd: " << Narrow(_com_error(HRESULT_FROM_WIN32(error)).ErrorMessage()) << endl;
+        state.error = true;
+        return error;
+    }
+#else
+    if (chdir(new_cwd.c_str()) != 0)
+    {
+        err << "cd: " << strerror(errno) << endl;
+        state.error = true;
+        return errno;
+    }
+#endif
+
+    if (!state.error)
+    {
+        state.let(".", get_current_working_directory(err));
+    }
+
+    return 0;
+}
+
 int pwd_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& state, vector<string>& args)
 {
     if (args.size() != 0)
@@ -245,24 +249,10 @@ int pwd_commandlet(istream& /*in*/, ostream& out, ostream& err, global_state& st
         return -1;
     }
 
-    DWORD requiredSize = GetCurrentDirectoryW(0, nullptr);
-    auto buf = new wchar_t[requiredSize];
+    out << get_current_working_directory(err) << endl;
 
-    if (GetCurrentDirectoryW(requiredSize, buf) != (requiredSize - 1))
-    {
-        delete [] buf;
-        DWORD error = GetLastError();
-        err << "pwd: " << Narrow(_com_error(HRESULT_FROM_WIN32(error)).ErrorMessage());
-        state.error = true;
-        return error;
-    }
-
-    out << Narrow(buf) << endl;
-
-    delete [] buf;
     return 0;
 }
-#endif
 
 #define DEFINE_COMMANDLET(name) { #name, name##_commandlet }
 
@@ -278,8 +268,5 @@ unordered_map<string, commandlet_function> special_functions(
     DEFINE_COMMANDLET(new),
     DEFINE_COMMANDLET(exit),
     DEFINE_COMMANDLET(cd),
-
-#ifdef _MSC_VER
     DEFINE_COMMANDLET(pwd),
-#endif
 });

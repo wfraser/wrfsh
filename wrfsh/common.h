@@ -1,5 +1,7 @@
 #pragma once
 
+std::string get_current_working_directory(std::ostream& errors_output);
+
 #ifdef _MSC_VER
 
 #define WIN32_LEAN_AND_MEAN

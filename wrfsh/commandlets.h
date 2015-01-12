@@ -26,10 +26,7 @@ COMMANDLET(else);
 COMMANDLET(endif);
 COMMANDLET(exit);
 COMMANDLET(cd);
-
-#ifdef _MSC_VER
 COMMANDLET(pwd);
-#endif
 
 #undef COMMANDLET
 

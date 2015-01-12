@@ -6,8 +6,10 @@
 #include <deque>
 #include <streambuf>
 #include <iostream>
+#include <unordered_map>
 
 #include "common.h"
+#include "global_state.h"
 #include "console.h"
 
 using namespace std;
@@ -31,9 +33,13 @@ Console::~Console()
 {
 }
 
-void Console::prompt()
+void Console::prompt(global_state& state)
 {
-    write_output("wrfsh", CharAttr::FG_Green | CharAttr::Underline);
+    write_output(state.lookup_var("USER"), CharAttr::FG_Green);
+    write_output("@");
+    write_output(state.lookup_var("HOSTNAME"), CharAttr::FG_Green);
+    write_output(":");
+    write_output(state.lookup_var("."), CharAttr::FG_Green);
     write_output("> ", CharAttr::FG_Green | CharAttr::FG_Bold);
 }
 
