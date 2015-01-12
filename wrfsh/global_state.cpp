@@ -58,22 +58,25 @@ global_state::global_state(int argc, const char * const argv [], const char * co
     }
     user.append(lookup_var("USERNAME"));
     let("USER", user);
-
-    vector<string> empty_args;
-    Process hostname_process("hostname", empty_args);
-
-    stringstream hostname_in, hostname_out, hostname_err;
-    int exitCode;
-    if (hostname_process.Run(hostname_in, hostname_out, hostname_err, &exitCode))
-    {
-        string hostname = hostname_out.str();
-        let("HOSTNAME", hostname.substr(0, hostname.find_last_of('\r')));
-    }
-    else
-    {
-        let("HOSTNAME", "localhost");
-    }
 #endif
+
+    if (environment.find("HOST") == environment.end())
+    {
+        vector<string> empty_args;
+        Process hostname_process("hostname", empty_args);
+
+        stringstream hostname_in, hostname_out, hostname_err;
+        int exitCode;
+        if (hostname_process.Run(hostname_in, hostname_out, hostname_err, &exitCode))
+        {
+            string hostname = hostname_out.str();
+            let("HOST", hostname.substr(0, hostname.find_last_of('\r')));
+        }
+        else
+        {
+            let("HOST", "localhost");
+        }
+    }
 }
 
 std::string global_state::lookup_var(string key)

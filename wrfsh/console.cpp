@@ -38,7 +38,7 @@ void Console::prompt(global_state& state)
 {
     write_output(state.lookup_var("USER"), CharAttr::FG_Green);
     write_output("@");
-    write_output(state.lookup_var("HOSTNAME"), CharAttr::FG_Green);
+    write_output(state.lookup_var("HOST"), CharAttr::FG_Green);
     write_output(":");
     write_output(state.lookup_var("."), CharAttr::FG_Green);
     write_output("> ", CharAttr::FG_Green | CharAttr::FG_Bold);
