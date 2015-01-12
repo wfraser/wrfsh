@@ -15,6 +15,7 @@ std::string get_current_working_directory(std::ostream& errors_output);
 // Posix
 
 #include <unistd.h>
+#include <string.h>
 
 #define countof(_) (sizeof(_) / sizeof(*_))
 
