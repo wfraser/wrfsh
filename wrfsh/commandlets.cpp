@@ -234,7 +234,8 @@ int cd_commandlet(istream& /*in*/, ostream& /*out*/, ostream& err, global_state&
 
     if (!state.error)
     {
-        state.let(".", get_current_working_directory(err));
+        state.let("OLDPWD", state.lookup_var("PWD"));
+        state.let("PWD", get_current_working_directory(err));
     }
 
     return 0;

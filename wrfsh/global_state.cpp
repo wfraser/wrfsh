@@ -23,7 +23,7 @@ global_state::global_state(int argc, const char * const argv [], const char * co
 
     let("#", to_string(argc - 1));
     let("?", "0");
-    let(".", get_current_working_directory(cerr));
+    let("PWD", get_current_working_directory(cerr));
 
     for (size_t i = 0; env[i] != nullptr; i++)
     {
@@ -70,7 +70,7 @@ global_state::global_state(int argc, const char * const argv [], const char * co
         if (hostname_process.Run(hostname_in, hostname_out, hostname_err, &exitCode))
         {
             string hostname = hostname_out.str();
-            let("HOST", hostname.substr(0, hostname.find_last_of('\r')));
+            let("HOST", hostname.substr(0, hostname.find_last_of("\r\n")));
         }
         else
         {
