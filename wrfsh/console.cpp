@@ -80,13 +80,13 @@ string Console::get_input_line()
                 }
                 break;
             case Input::Special::Home:
-                advance_cursor_pos(-1*m_currentInputLinePos);
+                advance_cursor_pos(-1 * static_cast<int>(m_currentInputLinePos));
                 m_currentInputLinePos = 0;
                 break;
             case Input::Special::End:
                 {
                     size_t size = m_inputLines[m_currentInputLineIdx].size();
-                    advance_cursor_pos(size - m_currentInputLinePos);
+                    advance_cursor_pos(static_cast<int>(size - m_currentInputLinePos));
                     m_currentInputLinePos = size;
                 }
                 break;
