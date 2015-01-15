@@ -11,6 +11,11 @@ std::string get_current_working_directory(std::ostream& errors_output);
 
 #define snprintf(buf, n, format, ...)  _snprintf_s(buf, n, n, format, __VA_ARGS__)
 
+int compare_string_nocase(const std::wstring& a, const std::wstring& b, int n);
+int compare_string_nocase(const std::wstring& a, const std::wstring& b);
+int compare_string_nocase(const std::string& a, const std::string& b, int n);
+int compare_string_nocase(const std::string& a, const std::string& b);
+
 #else
 // Posix
 

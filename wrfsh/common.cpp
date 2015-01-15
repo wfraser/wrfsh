@@ -37,3 +37,69 @@ string get_current_working_directory(ostream& error_output)
     return dir_str;
 #endif
 }
+
+#ifdef _MSC_VER
+
+int compare_string_nocase(const std::wstring& a, const std::wstring& b, int n)
+{
+    switch (CompareStringEx(
+        LOCALE_NAME_INVARIANT,
+        NORM_IGNORECASE,
+        a.c_str(),
+        n,
+        b.c_str(),
+        n,
+        nullptr,
+        nullptr,
+        0))
+    {
+    case CSTR_LESS_THAN:
+        return -1;
+    case CSTR_EQUAL:
+        return 0;
+    case CSTR_GREATER_THAN:
+        return 1;
+    default:
+        throw new exception();
+    }
+}
+
+int compare_string_nocase(const std::wstring& a, const std::wstring& b)
+{
+    switch (CompareStringEx(
+        LOCALE_NAME_INVARIANT,
+        NORM_IGNORECASE,
+        a.c_str(),
+        static_cast<int>(a.size()),
+        b.c_str(),
+        static_cast<int>(b.size()),
+        nullptr,
+        nullptr,
+        0))
+    {
+    case CSTR_LESS_THAN:
+        return -1;
+    case CSTR_EQUAL:
+        return 0;
+    case CSTR_GREATER_THAN:
+        return 1;
+    default:
+        throw new exception();
+    }
+}
+
+int compare_string_nocase(const std::string& a, const std::string& b, int n)
+{
+    wstring wa = Widen(a);
+    wstring wb = Widen(b);
+    return compare_string_nocase(wa, wb, n);
+}
+
+int compare_string_nocase(const std::string& a, const std::string& b)
+{
+    wstring wa = Widen(a);
+    wstring wb = Widen(b);
+    return compare_string_nocase(wa, wb);
+}
+
+#endif

@@ -47,19 +47,6 @@ global_state::global_state(int argc, const char * const argv [], const char * co
         environment.emplace(key, value);
     }
 
-
-#ifdef _MSC_VER
-    string user;
-    string domain = lookup_var("USERDOMAIN");
-    if (!domain.empty())
-    {
-        user = domain;
-        user.push_back('\\');
-    }
-    user.append(lookup_var("USERNAME"));
-    let("USER", user);
-#endif
-
     if (environment.find("HOST") == environment.end())
     {
         vector<string> empty_args;
@@ -70,13 +57,28 @@ global_state::global_state(int argc, const char * const argv [], const char * co
         if (hostname_process.Run(hostname_in, hostname_out, hostname_err, &exitCode))
         {
             string hostname = hostname_out.str();
-            let("HOST", hostname.substr(0, hostname.find_last_of("\r\n")));
+            let("HOST", hostname.substr(0, hostname.find_first_of("\r\n")));
         }
         else
         {
             let("HOST", "localhost");
         }
     }
+
+
+#ifdef _MSC_VER
+    string user;
+    string domain = lookup_var("USERDOMAIN");
+    if (!domain.empty() && (0 != compare_string_nocase(domain, lookup_var("HOST"))))
+    {
+        user = domain;
+        user.push_back('\\');
+    }
+    user.append(lookup_var("USERNAME"));
+    let("USER", user);
+
+    let("HOME", environment["HOMEDRIVE"] + environment["HOMEPATH"]);
+#endif
 }
 
 std::string global_state::lookup_var(string key)

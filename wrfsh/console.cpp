@@ -8,6 +8,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <list>
+#include <regex>
 
 #include "common.h"
 #include "global_state.h"
@@ -39,8 +40,32 @@ void Console::prompt(global_state& state)
     write_output(state.lookup_var("USER"), CharAttr::FG_Green);
     write_output("@");
     write_output(state.lookup_var("HOST"), CharAttr::FG_Green);
-    write_output(":");
-    write_output(state.lookup_var("PWD"), CharAttr::FG_Green);
+    write_output(" ");
+
+    string cwd = state.lookup_var("PWD");
+    string home = state.lookup_var("HOME");
+
+    if (!home.empty() && home.size() <= cwd.size())
+    {
+#ifdef _MSC_VER
+        if (0 == compare_string_nocase(cwd, home, static_cast<int>(home.size())))
+#else
+        if (cwd.find(home) == 0)
+#endif
+        {
+            cwd.replace(cwd.begin(), cwd.begin() + home.size(), "~");
+        }
+    }
+
+#ifdef _MSC_VER
+    for (size_t i = 0, n = cwd.size(); i < n; i++)
+    {
+        if (cwd[i] == '\\')
+            cwd[i] = '/';
+    }
+#endif
+
+    write_output(cwd, CharAttr::FG_Green);
     write_output("> ", CharAttr::FG_Green | CharAttr::FG_Bold);
 }
 
